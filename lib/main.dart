@@ -143,6 +143,12 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   String _hotkeyKey = 'Backspace';
   bool _useCustomHotkey = false;
 
+  // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
+  static const String currentVersion = '1.0.0';
+  bool _isUpdateAvailable = false;
+  String _latestVersion = '';
+  String _latestReleaseUrl = '';
+
   // ตัวแปรควบคุมธีมและการแสดงผล
   bool _isDarkMode = true;
   int _primaryColorValue = 0xFF6366F1; // Default Indigo
@@ -265,6 +271,64 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     await _loadSettings();
     await _initSystemTray();
     await _checkAccessibilityPermission();
+    _checkForUpdates(); // เช็คเวอร์ชันอัปเดตจาก GitHub ในพื้นหลัง
+  }
+
+  Future<void> _checkForUpdates() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.github.com/repos/q0022/TinyMind/releases/latest'),
+        headers: {'User-Agent': 'TinyMind-App'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final String tag = data['tag_name'] ?? '';
+        final String url = data['html_url'] ?? '';
+
+        if (_isNewerVersion(currentVersion, tag)) {
+          setState(() {
+            _isUpdateAvailable = true;
+            _latestVersion = tag.replaceAll('v', '').trim();
+            _latestReleaseUrl = url;
+          });
+          print("TinyMind Update: New version $_latestVersion available at $url");
+        } else {
+          print("TinyMind Update: App is up to date (current: $currentVersion, latest: $tag)");
+        }
+      }
+    } catch (e) {
+      print("TinyMind Update: Failed to check for updates: $e");
+    }
+  }
+
+  bool _isNewerVersion(String current, String remote) {
+    final currentClean = current.replaceAll('v', '').trim();
+    final remoteClean = remote.replaceAll('v', '').trim();
+
+    final currentParts = currentClean.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final remoteParts = remoteClean.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    final maxLength = remoteParts.length > currentParts.length ? remoteParts.length : currentParts.length;
+    for (int i = 0; i < maxLength; i++) {
+      final remotePart = i < remoteParts.length ? remoteParts[i] : 0;
+      final currentPart = i < currentParts.length ? currentParts[i] : 0;
+      if (remotePart > currentPart) return true;
+      if (remotePart < currentPart) return false;
+    }
+    return false;
+  }
+
+  void _launchUrl(String url) {
+    try {
+      if (Platform.isMacOS) {
+        Process.run('open', [url]);
+      } else if (Platform.isWindows) {
+        Process.run('start', [url], runInShell: true);
+      }
+    } catch (e) {
+      print("TinyMind Update: Failed to launch URL: $e");
+    }
   }
 
   void updateState(VoidCallback fn) {
@@ -1211,6 +1275,65 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           _buildSidebarItem(0, Icons.dashboard_rounded, AppTranslations.translate('dashboard', _displayLanguage)),
           _buildSidebarItem(1, Icons.settings_rounded, AppTranslations.translate('settings', _displayLanguage)),
           _buildSidebarItem(2, Icons.menu_book_rounded, AppTranslations.translate('dictionary', _displayLanguage)),
+          
+          if (_isUpdateAvailable) ...[
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _launchUrl(_latestReleaseUrl),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: const Color(0xFF6366F1).withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.system_update_alt_rounded,
+                          color: Color(0xFF6366F1),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                AppTranslations.translate('update_available', _displayLanguage),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF6366F1),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "v$_latestVersion",
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: _isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          
           const Spacer(),
           // สถานะ Accessibility Permission
           Padding(
@@ -1255,6 +1378,16 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Text(
+              "v$currentVersion",
+              style: TextStyle(
+                fontSize: 10,
+                color: _isDark ? Colors.white30 : Colors.black38,
               ),
             ),
           ),

@@ -82,6 +82,10 @@ class AppTranslations {
       'Layout': 'สลับภาษา',
       'Local AI': 'วิเคราะห์ด้วย AI',
       
+      // App Updates
+      'update_available': 'มีอัปเดตเวอร์ชันใหม่!',
+      'update_download_btn': 'ดาวน์โหลดตัวอัปเดต',
+
       // Tray Menu
       'tray_open': 'เปิดหน้าต่างหลัก',
       'tray_pause': 'ปิดการทำงานชั่วคราว',
@@ -170,6 +174,10 @@ class AppTranslations {
       'Layout': 'Layout',
       'Local AI': 'Local AI',
       
+      // App Updates
+      'update_available': 'New version available!',
+      'update_download_btn': 'Download update',
+
       // Tray Menu
       'tray_open': 'Open Window',
       'tray_pause': 'Pause',
