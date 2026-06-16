@@ -377,3 +377,34 @@ class AppDelegate: FlutterAppDelegate {
         }
     }
 }
+
+// File-scope helper to redirect all print statements to both console and tinymind.log
+fileprivate func print(_ items: Any...) {
+    let message = items.map { String(describing: $0) }.joined(separator: " ")
+    Swift.print(message)
+    fflush(stdout)
+    
+    let fileManager = FileManager.default
+    if let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+        let appSupportDir = appSupport.appendingPathComponent("com.tinymind.tinymind")
+        let logFile = appSupportDir.appendingPathComponent("tinymind.log")
+        
+        // Ensure directory exists
+        try? fileManager.createDirectory(at: appSupportDir, withIntermediateDirectories: true, attributes: nil)
+        
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestamp = formatter.string(from: Date())
+        let logLine = "[\(timestamp)] [Swift] \(message)\n"
+        
+        if let data = logLine.data(using: .utf8) {
+            if let fileHandle = try? FileHandle(forWritingTo: logFile) {
+                fileHandle.seekToEndOfFile()
+                fileHandle.write(data)
+                fileHandle.closeFile()
+            } else {
+                try? data.write(to: logFile, options: .atomic)
+            }
+        }
+    }
+}

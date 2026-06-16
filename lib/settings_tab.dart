@@ -530,6 +530,44 @@ class SettingsTab extends StatelessWidget {
               ),
             ],
           ]),
+          
+          const SizedBox(height: 20),
+
+          _buildSettingsBlock(AppTranslations.translate('diagnostics_section', state._displayLanguage), [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppTranslations.translate('export_logs_title', state._displayLanguage),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: state._textColorPrimary),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    AppTranslations.translate('export_logs_desc', state._displayLanguage),
+                    style: TextStyle(fontSize: 11, color: state._textColorSecondary),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: AppLogger.openLogDirectory,
+                    icon: const Icon(Icons.output_rounded, size: 16),
+                    label: Text(
+                      AppTranslations.translate('export_logs_btn', state._displayLanguage),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ]),
         ],
       ),
     );

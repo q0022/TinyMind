@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'autocorrect_engine.dart';
 import 'language_mapper.dart';
 import 'localization.dart';
+import 'logger.dart';
 
 part 'dashboard_tab.dart';
 part 'settings_tab.dart';
@@ -22,6 +23,7 @@ final GlobalKey<TinyMindAppState> tinyMindAppKey = GlobalKey<TinyMindAppState>()
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppLogger.init();
 
   // กำหนดค่า Launch at Startup
   LaunchAtStartup.instance.setup(
@@ -144,7 +146,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _useCustomHotkey = false;
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.1';
+  static const String currentVersion = '1.0.2';
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
@@ -292,13 +294,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
             _latestVersion = tag.replaceAll('v', '').trim();
             _latestReleaseUrl = url;
           });
-          print("TinyMind Update: New version $_latestVersion available at $url");
+          AppLogger.log("TinyMind Update: New version $_latestVersion available at $url");
         } else {
-          print("TinyMind Update: App is up to date (current: $currentVersion, latest: $tag)");
+          AppLogger.log("TinyMind Update: App is up to date (current: $currentVersion, latest: $tag)");
         }
       }
     } catch (e) {
-      print("TinyMind Update: Failed to check for updates: $e");
+      AppLogger.log("TinyMind Update: Failed to check for updates: $e");
     }
   }
 
@@ -327,7 +329,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         Process.run('start', [url], runInShell: true);
       }
     } catch (e) {
-      print("TinyMind Update: Failed to launch URL: $e");
+      AppLogger.log("TinyMind Update: Failed to launch URL: $e");
     }
   }
 
@@ -457,9 +459,9 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         'key': _hotkeyKey,
         'useCustom': _useCustomHotkey,
       });
-      print("Dart: updateHotkey sent: $_hotkeyModifier + $_hotkeyKey, useCustom: $_useCustomHotkey");
+      AppLogger.log("Dart: updateHotkey sent: $_hotkeyModifier + $_hotkeyKey, useCustom: $_useCustomHotkey");
     } catch (e) {
-      print("Dart: Error updating native hotkey: $e");
+      AppLogger.log("Dart: Error updating native hotkey: $e");
     }
   }
 
@@ -493,7 +495,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         });
       }
     } catch (e) {
-      print("Error checking accessibility: $e");
+      AppLogger.log("Error checking accessibility: $e");
     }
   }
 
@@ -505,7 +507,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         _hasAccessibility = hasAccess;
       });
     } catch (e) {
-      print("Error requesting accessibility: $e");
+      AppLogger.log("Error requesting accessibility: $e");
     }
   }
 
@@ -674,7 +676,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         }
       });
     } catch (e) {
-      print("System Tray Initialization Error: $e");
+      AppLogger.log("System Tray Initialization Error: $e");
     }
   }
 
@@ -715,14 +717,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       
       await _systemTray.setContextMenu(newMenu);
     } catch (e) {
-      print("Error updating System Tray Menu: $e");
+      AppLogger.log("Error updating System Tray Menu: $e");
     }
   }
 
   // --- Logic หลักการดักปุ่มพิมพ์ ---
 
   void _handleKeyPress(String char) {
-    print("Dart: _handleKeyPress received: '$char'");
+    AppLogger.log("Dart: _handleKeyPress received: '$char'");
     _canUndo = false; // Invalidate undo on keypress
 
     // 1. ถ้าพิมพ์ space, enter หรือ tab ถือว่าจบบทคำปัจจุบัน
@@ -783,13 +785,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       // ถ้าเป็นคำภาษาอังกฤษที่รู้จัก/ถูกต้องแล้ว ให้ล็อกสถานะและข้ามการตรวจเพิ่มทันที
       if (AutocorrectEngine.isCommonEnglishWord(trimmedWord)) {
         _isLayoutDecidedForCurrentWord = true;
-        print("Dart: _checkContinuousBufferCorrection: detected common English word '$trimmedWord'. Locking layout.");
+        AppLogger.log("Dart: _checkContinuousBufferCorrection: detected common English word '$trimmedWord'. Locking layout.");
         return;
       }
 
       final CorrectionResult? result = AutocorrectEngine.checkAndCorrectLocalStrict(trimmedWord);
       final String? corrected = result?.correctedWord;
-      print("Dart: _checkContinuousBufferCorrection: len=$len, buffer='$_currentBuffer', trimmed='$trimmedWord', corrected='$corrected'");
+      AppLogger.log("Dart: _checkContinuousBufferCorrection: len=$len, buffer='$_currentBuffer', trimmed='$trimmedWord', corrected='$corrected'");
       
       if (corrected != null && corrected != trimmedWord && result != null) {
         // ลบความยาวของคำในบัฟเฟอร์ ณ ตอนนี้
@@ -847,9 +849,9 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         // และถ้าทดสอบความยาวสะสมจนถึงรอบสุดท้ายแล้ว (startLen + 6) ให้ล็อกสถานะหยุดเช็คไปเลยค่ะ
         if (len >= startLen + 6) {
           _isLayoutDecidedForCurrentWord = true;
-          print("Dart: _checkContinuousBufferCorrection: reached final checkpoint (${startLen + 6}). Locking layout.");
+          AppLogger.log("Dart: _checkContinuousBufferCorrection: reached final checkpoint (${startLen + 6}). Locking layout.");
         } else {
-          print("Dart: _checkContinuousBufferCorrection: ambiguous layout at len $len. Will check again at len ${len + 2}.");
+          AppLogger.log("Dart: _checkContinuousBufferCorrection: ambiguous layout at len $len. Will check again at len ${len + 2}.");
         }
       }
     }
@@ -899,7 +901,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
     final CorrectionResult? result = AutocorrectEngine.checkAndCorrectLocal(trimmedWord);
     final String? corrected = result?.correctedWord;
-    print("Dart: _processWordCorrection: word='$word', trimmed='$trimmedWord', corrected='$corrected'");
+    AppLogger.log("Dart: _processWordCorrection: word='$word', trimmed='$trimmedWord', corrected='$corrected'");
     if (corrected != null && corrected != trimmedWord && result != null) {
       // ส่งคำสั่งลบและพิมพ์กลับไปยัง Native
       // ลบเท่ากับความยาวของคำผิดเดิม + 1 (สำหรับ endingChar ที่เพิ่งพิมพ์ไปหน้าจอ)
@@ -961,7 +963,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   // จัดการคีย์ลัดสำหรับแปลงภาษากลับ/สลับภาษาเอง (Hotkey Manual Fix & Undo)
   void _handleHotkey() {
-    print("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'");
+    AppLogger.log("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'");
     _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อประหยัด CPU และลดความขัดแย้ง
     if (_canUndo && _lastReplacement != null) {
       final original = _lastReplacement!['original']!;
@@ -1064,7 +1066,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         AutocorrectEngine.userEnWords.add(lowerWord);
         final prefs = await SharedPreferences.getInstance();
         await prefs.setStringList('userEnWords', AutocorrectEngine.userEnWords.toList());
-        print("Dart: Added English word to user dictionary: '$lowerWord'");
+        AppLogger.log("Dart: Added English word to user dictionary: '$lowerWord'");
       }
     }
 
@@ -1073,7 +1075,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         _ignoredWords.add(lowerWord);
       });
       await _saveSetting('ignoredWords', _ignoredWords);
-      print("Dart: Auto-added word to ignore list (dict) via hotkey: '$lowerWord'");
+      AppLogger.log("Dart: Auto-added word to ignore list (dict) via hotkey: '$lowerWord'");
     }
   }
 

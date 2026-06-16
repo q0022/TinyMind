@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:llama_cpp_dart/llama_cpp_dart.dart';
 import 'language_mapper.dart';
 import 'thai_mapper.dart';
+import 'logger.dart';
 
 class AutocorrectEngine {
   // ทะเบียนของภาษาที่เปิดใช้งานในระบบสลับคีย์บอร์ด (เริ่มต้นเป็นภาษาไทย)
@@ -99,7 +100,7 @@ class AutocorrectEngine {
         Llama.libraryPath = "/Users/q0022/.pub-cache/hosted/pub.dev/llama_cpp_dart-0.2.2/dist/Llama.xcframework/macos-arm64/Llama.framework/Llama";
       }
 
-      print("TinyMind: Loading local GGUF model: $modelPath");
+      AppLogger.log("TinyMind: Loading local GGUF model: $modelPath");
       // โหลด Model โดยตั้งค่า Context ขนาดเล็กเพื่อ Latency ที่เร็วที่สุด
       _llama = Llama(
         modelPath,
@@ -111,9 +112,9 @@ class AutocorrectEngine {
         verbose: true,
       );
       _loadedModelPath = modelPath;
-      print("TinyMind: Local GGUF model loaded successfully!");
+      AppLogger.log("TinyMind: Local GGUF model loaded successfully!");
     } catch (e) {
-      print("TinyMind: Failed to load local Llama model: $e");
+      AppLogger.log("TinyMind: Failed to load local Llama model: $e");
       _llama = null;
       _loadedModelPath = null;
       rethrow;
@@ -127,9 +128,9 @@ class AutocorrectEngine {
     if (_llama != null) {
       try {
         _llama!.dispose();
-        print("TinyMind: Disposed local GGUF model");
+        AppLogger.log("TinyMind: Disposed local GGUF model");
       } catch (e) {
-        print("TinyMind: Error disposing Llama: $e");
+        AppLogger.log("TinyMind: Error disposing Llama: $e");
       }
       _llama = null;
       _loadedModelPath = null;
@@ -265,7 +266,7 @@ class AutocorrectEngine {
   // ฟังก์ชันวิเคราะห์ประโยคและบริบทโดยใช้ Local llama.cpp (Embedded AI)
   static Future<String?> checkAndCorrectAI(String sentence) async {
     if (_llama == null) {
-      print("TinyMind AI: Model is not loaded yet.");
+      AppLogger.log("TinyMind AI: Model is not loaded yet.");
       return null;
     }
 
@@ -291,7 +292,7 @@ Corrected Text:""";
         return trimmed;
       }
     } catch (e) {
-      print("TinyMind Local AI Inference Error: $e");
+      AppLogger.log("TinyMind Local AI Inference Error: $e");
     }
     return null;
   }

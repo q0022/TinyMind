@@ -86,6 +86,12 @@ class AppTranslations {
       'update_available': 'มีอัปเดตเวอร์ชันใหม่!',
       'update_download_btn': 'ดาวน์โหลดตัวอัปเดต',
 
+      // Diagnostics
+      'diagnostics_section': 'การวินิจฉัยและบันทึกประวัติ',
+      'export_logs_title': 'ส่งออกไฟล์ประวัติการทำงาน (Logs)',
+      'export_logs_desc': 'เปิดโฟลเดอร์เก็บข้อมูลประวัติของแอป สำหรับส่งให้นักพัฒนานำไปวิเคราะห์แก้ไขปัญหา',
+      'export_logs_btn': 'เปิดโฟลเดอร์ Log',
+
       // Tray Menu
       'tray_open': 'เปิดหน้าต่างหลัก',
       'tray_pause': 'ปิดการทำงานชั่วคราว',
@@ -177,6 +183,12 @@ class AppTranslations {
       // App Updates
       'update_available': 'New version available!',
       'update_download_btn': 'Download update',
+
+      // Diagnostics
+      'diagnostics_section': 'Diagnostics & Logs',
+      'export_logs_title': 'Export Application Logs',
+      'export_logs_desc': 'Open the folder containing application logs to send to the developer for debugging',
+      'export_logs_btn': 'Open Logs Folder',
 
       // Tray Menu
       'tray_open': 'Open Window',
