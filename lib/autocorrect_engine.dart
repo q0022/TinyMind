@@ -147,41 +147,41 @@ class AutocorrectEngine {
   static CorrectionResult? checkAndCorrectLocal(String word) {
     if (word.isEmpty || word.length < 2) return null;
 
-    // 1. ตรวจสอบกรณีพิมพ์อังกฤษแต่ลืมเปลี่ยนภาษา (เช่น "l;lfu" -> "สวัสดี" หรือ "wfh" -> "ทำงาน")
-    if (RegExp(r"^[a-zA-Z\d;\[\]\\,.//=?`~\-_=+!@#\$%^&*()']+$").hasMatch(word)) {
-      if (_commonEnWords.contains(word.toLowerCase())) {
-        return null;
-      }
-
-      for (var mapper in _mappers) {
-        final converted = mapper.convertToTarget(word);
-        if (mapper.isCommonWord(converted) || mapper.isValidPattern(converted)) {
+    // 1. ตรวจสอบกรณีพิมพ์ไทยผสมอังกฤษ (สลับเลย์เอาต์กลางคำ) หรือลืมเปลี่ยนภาษาแบบผสม
+    // ลองแปลงเป็นภาษาอังกฤษดู
+    for (var mapper in _mappers) {
+      final enConverted = mapper.convertFromTarget(word);
+      if (enConverted != word) {
+        if (_commonEnWords.contains(enConverted.toLowerCase()) || _isValidEnglishAbbreviation(enConverted)) {
           return CorrectionResult(
-            correctedWord: converted,
+            correctedWord: enConverted,
             languageCode: mapper.languageCode,
-            isToTargetLanguage: true,
+            isToTargetLanguage: false,
           );
         }
       }
-    } 
-    // 2. ตรวจสอบกรณีพิมพ์ภาษาอื่นแต่ลืมเปลี่ยนภาษา (เช่น "ไพำ" -> "wfh")
-    else {
-      for (var mapper in _mappers) {
-        // ภาษาไทยจะใช้ regex ก-์ ของมัน ภาษาอื่นจะกำหนดต่างกัน
-        final pattern = mapper.languageCode == 'th' ? r'^[ก-์\d]+$' : '';
-        if (pattern.isNotEmpty && RegExp(pattern).hasMatch(word)) {
-          if (mapper.isCommonWord(word)) {
-            continue; // เป็นคำที่ถูกต้องของภาษานั้นแล้ว ไม่ต้องแปลงกลับเป็น Eng
+    }
+
+    // 2. ลองแปลงเป็นภาษาไทยดู
+    for (var mapper in _mappers) {
+      final thConverted = mapper.convertToTarget(word);
+      if (thConverted != word) {
+        if (mapper.isCommonWord(thConverted) || mapper.isValidPattern(thConverted)) {
+          // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายหรือมีรูปแบบปกติอยู่แล้ว
+          if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
+            if (_commonEnWords.contains(word.toLowerCase())) {
+              continue;
+            }
+            if (!mapper.isCommonWord(thConverted) && word.length >= 4) {
+              continue; // ไม่แปลงคำอังกฤษยาวๆ ที่ไม่ใช่คำไทยยอดนิยม เพื่อป้องกัน False Positive
+            }
           }
 
-          final enConverted = mapper.convertFromTarget(word);
-          if (_commonEnWords.contains(enConverted.toLowerCase()) || _isValidEnglishAbbreviation(enConverted)) {
-            return CorrectionResult(
-              correctedWord: enConverted,
-              languageCode: mapper.languageCode,
-              isToTargetLanguage: false,
-            );
-          }
+          return CorrectionResult(
+            correctedWord: thConverted,
+            languageCode: mapper.languageCode,
+            isToTargetLanguage: true,
+          );
         }
       }
     }
@@ -198,17 +198,37 @@ class AutocorrectEngine {
   static CorrectionResult? checkAndCorrectLocalStrict(String word) {
     if (word.isEmpty || word.length < 2) return null;
 
-    // ตรวจสอบกรณีพิมพ์อังกฤษแต่ลืมเปลี่ยนภาษา
-    if (RegExp(r"^[a-zA-Z\d;\[\]\\,.//=?`~\-_=+!@#\$%^&*()']+$").hasMatch(word)) {
-      if (_commonEnWords.contains(word.toLowerCase())) {
-        return null;
-      }
-
-      for (var mapper in _mappers) {
-        final converted = mapper.convertToTarget(word);
-        if (mapper.isCommonWord(converted) || mapper.isValidPatternStrict(converted, word)) {
+    // 1. ลองแปลงเป็นภาษาอังกฤษก่อน
+    for (var mapper in _mappers) {
+      final enConverted = mapper.convertFromTarget(word);
+      if (enConverted != word) {
+        if (_commonEnWords.contains(enConverted.toLowerCase())) {
           return CorrectionResult(
-            correctedWord: converted,
+            correctedWord: enConverted,
+            languageCode: mapper.languageCode,
+            isToTargetLanguage: false,
+          );
+        }
+      }
+    }
+
+    // 2. ลองแปลงเป็นภาษาไทย
+    for (var mapper in _mappers) {
+      final thConverted = mapper.convertToTarget(word);
+      if (thConverted != word) {
+        if (mapper.isCommonWord(thConverted) || mapper.isValidPatternStrict(thConverted, word)) {
+          // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายอยู่แล้ว
+          if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
+            if (_commonEnWords.contains(word.toLowerCase())) {
+              continue;
+            }
+            if (!mapper.isCommonWord(thConverted) && word.length >= 4) {
+              continue;
+            }
+          }
+
+          return CorrectionResult(
+            correctedWord: thConverted,
             languageCode: mapper.languageCode,
             isToTargetLanguage: true,
           );
