@@ -144,7 +144,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _useCustomHotkey = false;
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.0';
+  static const String currentVersion = '1.0.1';
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
