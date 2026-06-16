@@ -51,9 +51,27 @@ class AppDelegate: FlutterAppDelegate {
         startMonitoringKeyboard()
         startMonitoringMouse()
         
+        // ตั้งค่าก่อนเรียก super เพื่อพยายามซ่อนตั้งแต่แรก
+        NSApp.setActivationPolicy(.accessory)
+        
         super.applicationDidFinishLaunching(notification)
         print("AppDelegate: super.applicationDidFinishLaunching returned.")
         fflush(stdout)
+        
+        // ซ่อนไอคอนออกจาก Dock — บังคับหลัง super ทันที
+        NSApp.setActivationPolicy(.accessory)
+        
+        // และบังคับอีกครั้งหลัง delay เพื่อให้ชนะ Flutter internal setup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NSApp.setActivationPolicy(.accessory)
+            print("AppDelegate: Set activation policy to .accessory (delayed 0.5s)")
+            fflush(stdout)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            NSApp.setActivationPolicy(.accessory)
+            print("AppDelegate: Set activation policy to .accessory (delayed 2.0s)")
+            fflush(stdout)
+        }
     }
     
     private func setupMethodChannelHandler() {
@@ -106,6 +124,16 @@ class AppDelegate: FlutterAppDelegate {
     
     override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
+    }
+    
+    // บังคับซ่อน Dock icon ทุกครั้งที่ app กลับมา active
+    override func applicationDidBecomeActive(_ notification: Notification) {
+        super.applicationDidBecomeActive(notification)
+        if NSApp.activationPolicy() != .accessory {
+            NSApp.setActivationPolicy(.accessory)
+            print("AppDelegate: applicationDidBecomeActive - forced .accessory policy")
+            fflush(stdout)
+        }
     }
     
     func startMonitoringKeyboard() {
