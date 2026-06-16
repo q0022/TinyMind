@@ -71,6 +71,9 @@ class AutocorrectEngine {
     'zero', 'zone',
   };
 
+  // คลังคำศัพท์ภาษาอังกฤษเพิ่มเติมของผู้ใช้ (เรียนรู้จากการกู้คืนด้วย Hotkey)
+  static final Set<String> userEnWords = {};
+
   // ตัวแปรเก็บ Llama Instance
   static Llama? _llama;
   static String? _loadedModelPath;
@@ -152,7 +155,9 @@ class AutocorrectEngine {
     for (var mapper in _mappers) {
       final enConverted = mapper.convertFromTarget(word);
       if (enConverted != word) {
-        if (_commonEnWords.contains(enConverted.toLowerCase()) || _isValidEnglishAbbreviation(enConverted)) {
+        if (_commonEnWords.contains(enConverted.toLowerCase()) || 
+            userEnWords.contains(enConverted.toLowerCase()) || 
+            _isValidEnglishAbbreviation(enConverted)) {
           return CorrectionResult(
             correctedWord: enConverted,
             languageCode: mapper.languageCode,
@@ -169,7 +174,7 @@ class AutocorrectEngine {
         if (mapper.isCommonWord(thConverted) || mapper.isValidPattern(thConverted)) {
           // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายหรือมีรูปแบบปกติอยู่แล้ว
           if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
-            if (_commonEnWords.contains(word.toLowerCase())) {
+            if (_commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase())) {
               continue;
             }
             if (!mapper.isCommonWord(thConverted) && word.length >= 4) {
@@ -191,7 +196,7 @@ class AutocorrectEngine {
 
   static bool isCommonEnglishWord(String word) {
     if (word.isEmpty) return false;
-    return _commonEnWords.contains(word.toLowerCase());
+    return _commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase());
   }
 
   // ฟังก์ชันวิเคราะห์การแก้ไขคำผิดระดับคำเดี่ยวแบบเข้มงวดเป็นพิเศษ (สำหรับ Continuous Switch)
@@ -202,7 +207,7 @@ class AutocorrectEngine {
     for (var mapper in _mappers) {
       final enConverted = mapper.convertFromTarget(word);
       if (enConverted != word) {
-        if (_commonEnWords.contains(enConverted.toLowerCase())) {
+        if (_commonEnWords.contains(enConverted.toLowerCase()) || userEnWords.contains(enConverted.toLowerCase())) {
           return CorrectionResult(
             correctedWord: enConverted,
             languageCode: mapper.languageCode,
@@ -219,7 +224,7 @@ class AutocorrectEngine {
         if (mapper.isCommonWord(thConverted) || mapper.isValidPatternStrict(thConverted, word)) {
           // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายอยู่แล้ว
           if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
-            if (_commonEnWords.contains(word.toLowerCase())) {
+            if (_commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase())) {
               continue;
             }
             if (!mapper.isCommonWord(thConverted) && word.length >= 4) {

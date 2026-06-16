@@ -346,6 +346,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       // โหลดคำข้าม
       _ignoredWords = prefs.getStringList('ignoredWords') ?? [];
 
+      // โหลดคลังคำศัพท์ภาษาอังกฤษของผู้ใช้
+      final userEnList = prefs.getStringList('userEnWords') ?? [];
+      AutocorrectEngine.userEnWords.clear();
+      AutocorrectEngine.userEnWords.addAll(userEnList);
+
       // โหลดประวัติการแก้ล่าสุด
       final historyRaw = prefs.getString('recentCorrections');
       if (historyRaw != null) {
@@ -988,6 +993,17 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   Future<void> _addWordToIgnoreList(String word) async {
     final lowerWord = word.trim().toLowerCase();
     if (lowerWord.isEmpty || lowerWord.length < 2) return;
+
+    // ถ้าเป็นภาษาอังกฤษ ให้เพิ่มในคลังคำศัพท์ภาษาอังกฤษของผู้ใช้ด้วย เพื่อให้ระบบรู้จักในการตรวจแก้ครั้งถัดไป
+    if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(lowerWord)) {
+      if (!AutocorrectEngine.userEnWords.contains(lowerWord)) {
+        AutocorrectEngine.userEnWords.add(lowerWord);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList('userEnWords', AutocorrectEngine.userEnWords.toList());
+        print("Dart: Added English word to user dictionary: '$lowerWord'");
+      }
+    }
+
     if (!_ignoredWords.contains(lowerWord)) {
       setState(() {
         _ignoredWords.add(lowerWord);
