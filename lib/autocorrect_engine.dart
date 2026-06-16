@@ -150,6 +150,11 @@ class AutocorrectEngine {
   static CorrectionResult? checkAndCorrectLocal(String word) {
     if (word.isEmpty || word.length < 2) return null;
 
+    // ป้องกันการแปลงหากคำเป็นตัวเลขทศนิยม เวอร์ชัน หรือ IP address (เช่น 1.0, 3.14, .50, v1.0.0)
+    if (RegExp(r'^v?\d*\.\d+(\.\d+)*$').hasMatch(word)) {
+      return null;
+    }
+
     // 1. ตรวจสอบกรณีพิมพ์ไทยผสมอังกฤษ (สลับเลย์เอาต์กลางคำ) หรือลืมเปลี่ยนภาษาแบบผสม
     // ลองแปลงเป็นภาษาอังกฤษดู
     for (var mapper in _mappers) {
@@ -202,6 +207,11 @@ class AutocorrectEngine {
   // ฟังก์ชันวิเคราะห์การแก้ไขคำผิดระดับคำเดี่ยวแบบเข้มงวดเป็นพิเศษ (สำหรับ Continuous Switch)
   static CorrectionResult? checkAndCorrectLocalStrict(String word) {
     if (word.isEmpty || word.length < 2) return null;
+
+    // ป้องกันการแปลงหากคำเป็นตัวเลขทศนิยม เวอร์ชัน หรือ IP address (เช่น 1.0, 3.14, .50, v1.0.0)
+    if (RegExp(r'^v?\d*\.\d+(\.\d+)*$').hasMatch(word)) {
+      return null;
+    }
 
     // 1. ลองแปลงเป็นภาษาอังกฤษก่อน
     for (var mapper in _mappers) {

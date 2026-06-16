@@ -62,6 +62,17 @@ class ThaiMapper implements LanguageMapper {
     final firstChar = text[0];
     if (RegExp(r'[ิีึืั็ํุู่้๊๋์]').hasMatch(firstChar)) return false;
 
+    // ตัวลากข้าง (ๅ) ต้องตามหลัง ฤ หรือ ฦ เท่านั้น
+    if (text.contains('ๅ')) {
+      for (int i = 0; i < text.length; i++) {
+        if (text[i] == 'ๅ') {
+          if (i == 0 || !(text[i - 1] == 'ฤ' || text[i - 1] == 'ฦ')) {
+            return false;
+          }
+        }
+      }
+    }
+
     for (var thWord in _commonThWords) {
       if (text.contains(thWord) && text.length - thWord.length <= 2) {
         return true;
@@ -77,6 +88,17 @@ class ThaiMapper implements LanguageMapper {
 
     // ต้องมีเฉพาะตัวอักษรไทย/วรรณยุกต์
     if (!RegExp(r'^[ก-์\d]+$').hasMatch(thText)) return false;
+
+    // ตัวลากข้าง (ๅ) ต้องตามหลัง ฤ หรือ ฦ เท่านั้น
+    if (thText.contains('ๅ')) {
+      for (int i = 0; i < thText.length; i++) {
+        if (thText[i] == 'ๅ') {
+          if (i == 0 || !(thText[i - 1] == 'ฤ' || thText[i - 1] == 'ฦ')) {
+            return false;
+          }
+        }
+      }
+    }
 
     // ตัวแรกต้องเป็นพยัญชนะต้น หรือสระหน้าเท่านั้น
     final firstChar = thText[0];
