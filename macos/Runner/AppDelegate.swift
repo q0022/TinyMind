@@ -81,10 +81,21 @@ class AppDelegate: FlutterAppDelegate {
             if call.method == "checkAccessibility" {
                 let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
                 let isTrusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
-                result(isTrusted)
+                if isTrusted && self?.eventTap == nil {
+                    print("AppDelegate: checkAccessibility: Process is trusted but eventTap is nil. Attempting to start...")
+                    fflush(stdout)
+                    self?.startMonitoringKeyboard()
+                }
+                let hasEventTap = self?.eventTap != nil
+                result(isTrusted && hasEventTap)
             } else if call.method == "requestAccessibility" {
                 let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
                 let isTrusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
+                if isTrusted && self?.eventTap == nil {
+                    print("AppDelegate: requestAccessibility: Process is trusted but eventTap is nil. Attempting to start...")
+                    fflush(stdout)
+                    self?.startMonitoringKeyboard()
+                }
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                     if !NSWorkspace.shared.open(url) {
                         if let fallbackUrl = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
@@ -92,7 +103,8 @@ class AppDelegate: FlutterAppDelegate {
                         }
                     }
                 }
-                result(isTrusted)
+                let hasEventTap = self?.eventTap != nil
+                result(isTrusted && hasEventTap)
             } else if call.method == "replaceText" {
                 if let args = call.arguments as? [String: Any],
                    let backspaces = args["backspaces"] as? Int,
