@@ -47,3 +47,7 @@ app.*.map.json
 # Local AI Models
 assets/models/
 *.gguf
+
+# Release builds packaged
+TinyMind-macOS.dmg
+TinyMind-macOS.zip
