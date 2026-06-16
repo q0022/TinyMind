@@ -682,18 +682,15 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     }
   }
 
-  // สลับภาษาอัตโนมัติเมื่อความยาวตัวอักษรถึงเกณฑ์แบบสะสม (+2, +2, +2)
+  // สลับภาษาอัตโนมัติเมื่อความยาวตัวอักษรถึงเกณฑ์ขั้นต่ำ
   void _checkContinuousBufferCorrection() {
     if (!_isLocalCorrection || !_isAutoSwitchOnLength) return;
 
     final int len = _currentBuffer.length;
     final int startLen = _autoSwitchLength;
 
-    // ตรวจสอบที่ตำแหน่งด่านต่างๆ: startLen, startLen + 2, startLen + 4, startLen + 6
-    if (len == startLen || 
-        len == startLen + 2 || 
-        len == startLen + 4 || 
-        len == startLen + 6) {
+    // ตรวจสอบเมื่อความยาวตัวอักษรตั้งแต่เกณฑ์ขั้นต่ำขึ้นไป เพื่อป้องกันการกดคีย์ข้ามด่านเวลาพิมพ์เร็ว
+    if (len >= startLen) {
       
       // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผล (หากมี)
       String trimmedWord = _currentBuffer;
