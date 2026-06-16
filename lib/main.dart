@@ -1,0 +1,1314 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:system_tray/system_tray.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:launch_at_startup/launch_at_startup.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart' as fp;
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+import 'autocorrect_engine.dart';
+import 'language_mapper.dart';
+import 'localization.dart';
+
+part 'dashboard_tab.dart';
+part 'settings_tab.dart';
+part 'dictionary_tab.dart';
+
+final GlobalKey<TinyMindAppState> tinyMindAppKey = GlobalKey<TinyMindAppState>();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // กำหนดค่า Launch at Startup
+  LaunchAtStartup.instance.setup(
+    appName: "TinyMind",
+    appPath: Platform.resolvedExecutable,
+  );
+
+  // ตั้งค่า Window Manager
+  await windowManager.ensureInitialized();
+
+  WindowOptions windowOptions = const WindowOptions(
+    size: Size(900, 620),
+    minimumSize: Size(900, 620),
+    center: true,
+    backgroundColor: Colors.transparent,
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.hidden, // ซ่อน Title Bar หลัก เพื่อออกแบบ UI เอง
+  );
+
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
+    await windowManager.setPreventClose(true); // ป้องกันไม่ให้กดปิดแล้วปิดโปรเจกต์ (ให้ซ่อนลง Tray แทน)
+  });
+
+  runApp(TinyMindApp(key: tinyMindAppKey));
+}
+
+class TinyMindApp extends StatefulWidget {
+  const TinyMindApp({super.key});
+
+  @override
+  State<TinyMindApp> createState() => TinyMindAppState();
+}
+
+class TinyMindAppState extends State<TinyMindApp> {
+  ThemeMode _themeMode = ThemeMode.dark;
+  Color _primaryColor = const Color(0xFF6366F1); // Default Indigo
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThemeSettings();
+  }
+
+  Future<void> _loadThemeSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool('isDarkMode') ?? true;
+    final colorVal = prefs.getInt('primaryColorValue') ?? 0xFF6366F1;
+    setState(() {
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      _primaryColor = Color(colorVal);
+    });
+  }
+
+  void updateTheme(ThemeMode mode, Color primary) {
+    setState(() {
+      _themeMode = mode;
+      _primaryColor = primary;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'TinyMind - AI Autocorrection',
+      debugShowCheckedModeBanner: false,
+      themeMode: _themeMode,
+      theme: ThemeData(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: Colors.transparent,
+        colorScheme: ColorScheme.light(
+          primary: _primaryColor,
+          secondary: _primaryColor.withOpacity(0.8),
+          surface: const Color(0xFFF1F5F9), // slate 100
+          background: const Color(0xFFF8FAFC), // slate 50
+        ),
+        fontFamily: 'SF Pro Display',
+      ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.transparent,
+        colorScheme: ColorScheme.dark(
+          primary: _primaryColor,
+          secondary: _primaryColor.withOpacity(0.8),
+          surface: const Color(0xFF1E293B), // slate 800
+          background: const Color(0xFF0F172A), // slate 900
+        ),
+        fontFamily: 'SF Pro Display',
+      ),
+      home: const MainDashboard(),
+    );
+  }
+}
+
+class MainDashboard extends StatefulWidget {
+  const MainDashboard({super.key});
+
+  @override
+  State<MainDashboard> createState() => _MainDashboardState();
+}
+
+class _MainDashboardState extends State<MainDashboard> with WindowListener {
+  // Method Channel สำหรับสื่อสารกับ macOS Native Swift
+  static const _platform = MethodChannel('com.tinymind.app/keyboard');
+
+  // ตัวแปรการตั้งค่า
+  bool _isEnabled = true;
+  bool _isAutoStart = false;
+  bool _isLocalCorrection = true;
+  bool _isAiCorrection = false;
+  String _ggufModelPath = '';
+  bool _isModelLoading = false;
+  bool _hasAccessibility = false;
+  bool _isAutoSwitchOnLength = true;
+  int _autoSwitchLength = 8;
+  bool _isLayoutDecidedForCurrentWord = false;
+  String _hotkeyModifier = 'Shift';
+  String _hotkeyKey = 'Backspace';
+  bool _useCustomHotkey = false;
+
+  // ตัวแปรควบคุมธีมและการแสดงผล
+  bool _isDarkMode = true;
+  int _primaryColorValue = 0xFF6366F1; // Default Indigo
+  String _displayLanguage = 'th';
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _surfaceColor {
+    return _isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03);
+  }
+
+  Color get _borderColor {
+    return _isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05);
+  }
+
+  Color get _dividerColor {
+    return _isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05);
+  }
+
+  Color get _textColorPrimary {
+    return _isDark ? Colors.white : Colors.black87;
+  }
+
+  Color get _textColorSecondary {
+    return _isDark ? Colors.white70 : Colors.black54;
+  }
+
+  Color get _textColorTertiary {
+    return _isDark ? Colors.white30 : Colors.black38;
+  }
+
+  void _changeThemeMode(bool isDark) {
+    setState(() {
+      _isDarkMode = isDark;
+      _saveSetting('isDarkMode', isDark);
+    });
+    tinyMindAppKey.currentState?.updateTheme(
+      isDark ? ThemeMode.dark : ThemeMode.light,
+      Color(_primaryColorValue),
+    );
+  }
+
+  void _changePrimaryColor(int colorValue) {
+    setState(() {
+      _primaryColorValue = colorValue;
+      _saveSetting('primaryColorValue', colorValue);
+    });
+    tinyMindAppKey.currentState?.updateTheme(
+      _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      Color(colorValue),
+    );
+  }
+
+  // สำหรับระบบดาวน์โหลดโมเดลอัตโนมัติ
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+  String _downloadProgressText = '';
+
+  // ข้อมูลสถิติ (Statistics)
+  int _wordsCorrected = 0;
+  int _layoutFixed = 0;
+  int _aiRequests = 0;
+  int _savedChars = 0;
+
+  // ตัวแปร UI & Buffer
+  String _currentBuffer = '';
+  String _fullSentenceBuffer = '';
+  Timer? _debounceTimer;
+  Map<String, String>? _lastReplacement;
+  String _lastReplacementEndingChar = '';
+  bool _canUndo = false;
+  int _activeTab = 0; // 0: Dashboard, 1: Settings, 2: Dictionary
+
+  final SystemTray _systemTray = SystemTray();
+
+  // ประวัติการแก้ไขคำผิดล่าสุด
+  List<Map<String, String>> _recentCorrections = [];
+
+  // คำศัพท์ข้าม (Custom Skip/Ignore Words)
+  List<String> _ignoredWords = [];
+  final TextEditingController _ignoreWordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    _initApp();
+
+    // ฟังเหตุการณ์จาก macOS Keyboard Hook
+    _platform.setMethodCallHandler((call) async {
+      if (!_isEnabled) return;
+
+      switch (call.method) {
+        case 'onKey':
+          final args = call.arguments as Map;
+          final String char = args['char'];
+          _handleKeyPress(char);
+          break;
+        case 'onBackspace':
+          _handleBackspace();
+          break;
+        case 'clearBuffer':
+          _clearBuffers();
+          break;
+        case 'onHotkey':
+          _handleHotkey();
+          break;
+      }
+    });
+
+    // เริ่มการสืบค้นสิทธิ์ Accessibility ซ้ำทุก 2 วินาที จนกว่าจะอนุญาต
+    Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!_hasAccessibility && mounted) {
+        _checkAccessibilityPermission();
+      }
+    });
+  }
+
+  Future<void> _initApp() async {
+    await _loadSettings();
+    await _initSystemTray();
+    await _checkAccessibilityPermission();
+  }
+
+  void updateState(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    }
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    _debounceTimer?.cancel();
+    _ignoreWordController.dispose();
+    super.dispose();
+  }
+
+  // โหลดค่าปรับแต่งจาก Shared Preferences
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isEnabled = prefs.getBool('isEnabled') ?? true;
+      _isAutoStart = prefs.getBool('isAutoStart') ?? false;
+      _isLocalCorrection = prefs.getBool('isLocalCorrection') ?? true;
+      _isAiCorrection = prefs.getBool('isAiCorrection') ?? false;
+      _ggufModelPath = prefs.getString('ggufModelPath') ?? '';
+      // หากยังคงเป็นโมเดลตัวเก่า ให้รีเซ็ตทิ้งเพื่อบังคับอัปเกรดเป็น qwen3-0.6b
+      if (!_ggufModelPath.contains('qwen3-0.6b') || _ggufModelPath.isEmpty) {
+        _ggufModelPath = '';
+        _saveSetting('ggufModelPath', '');
+      }
+      // ตรวจสอบว่าไฟล์โมเดลมีอยู่จริงและมีขนาดสมบูรณ์หรือไม่ (อย่างน้อย 300 MB สำหรับ Qwen3-0.6B)
+      if (_ggufModelPath.isNotEmpty) {
+        final file = File(_ggufModelPath);
+        if (!file.existsSync() || file.lengthSync() < 300 * 1024 * 1024) {
+          // หากไฟล์ไม่มีอยู่จริงหรือดาวน์โหลดไม่เสร็จ (ขนาดเล็กเกินไป) ให้ลบไฟล์และเคลียร์ค่า
+          if (file.existsSync()) {
+            try { file.deleteSync(); } catch (_) {}
+          }
+          _ggufModelPath = '';
+          _saveSetting('ggufModelPath', '');
+        }
+      }
+      // หากไม่มีโมเดลอยู่จริง แต่สวิตช์ AI เปิดค้างอยู่ ให้รีเซ็ตสวิตช์เป็น ปิด (false)
+      if (_ggufModelPath.isEmpty && _isAiCorrection) {
+        _isAiCorrection = false;
+        _saveSetting('isAiCorrection', false);
+      }
+      _isAutoSwitchOnLength = prefs.getBool('isAutoSwitchOnLength') ?? true;
+      _autoSwitchLength = prefs.getInt('autoSwitchLength') ?? 8;
+
+      // ค้นหาโมเดลในเครื่องโดยอัตโนมัติหากยังไม่ได้ตั้งค่า
+      if (_ggufModelPath.isEmpty) {
+        getApplicationSupportDirectory().then((dir) {
+          final modelFile = File('${dir.path}/models/qwen3-0.6b-instruct-q4_k_m.gguf');
+          if (modelFile.existsSync()) {
+            setState(() {
+              _ggufModelPath = modelFile.path;
+            });
+            _saveSetting('ggufModelPath', modelFile.path);
+          } else {
+            // เช็คในโฟลเดอร์พัฒนาของเครื่องพี่บอยเพื่อความรวดเร็วในการทดสอบ
+            const devPath = '/Users/q0022/sites/TinyMind/assets/models/qwen3-0.6b-instruct-q4_k_m.gguf';
+            if (File(devPath).existsSync()) {
+              setState(() {
+                _ggufModelPath = devPath;
+              });
+              _saveSetting('ggufModelPath', devPath);
+            }
+          }
+        });
+      }
+
+      // โหลดสถิติ
+      _wordsCorrected = prefs.getInt('wordsCorrected') ?? 0;
+      _layoutFixed = prefs.getInt('layoutFixed') ?? 0;
+      _aiRequests = prefs.getInt('aiRequests') ?? 0;
+      _savedChars = prefs.getInt('savedChars') ?? 0;
+
+      // โหลดคำข้าม
+      _ignoredWords = prefs.getStringList('ignoredWords') ?? [];
+
+      // โหลดประวัติการแก้ล่าสุด
+      final historyRaw = prefs.getString('recentCorrections');
+      if (historyRaw != null) {
+        _recentCorrections = List<Map<String, String>>.from(
+          (jsonDecode(historyRaw) as List).map((item) => Map<String, String>.from(item)),
+        );
+      }
+
+      // โหลดปุ่มลัด
+      _hotkeyModifier = prefs.getString('hotkeyModifier') ?? 'Shift';
+      _hotkeyKey = prefs.getString('hotkeyKey') ?? 'Backspace';
+      _useCustomHotkey = prefs.getBool('useCustomHotkey') ?? false;
+
+      // โหลดธีม
+      _isDarkMode = prefs.getBool('isDarkMode') ?? true;
+      _primaryColorValue = prefs.getInt('primaryColorValue') ?? 0xFF6366F1;
+      _displayLanguage = prefs.getString('displayLanguage') ?? 'th';
+    });
+
+    // อัปเดต Hotkey ไปยังฝั่ง Native
+    await _updateNativeHotkey();
+
+    // อัปเดต ThemeMode ไปยัง TinyMindApp
+    tinyMindAppKey.currentState?.updateTheme(
+      _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      Color(_primaryColorValue),
+    );
+
+    if (_isAiCorrection && _ggufModelPath.isNotEmpty) {
+      _initLocalLlama(_ggufModelPath);
+    }
+    _updateSystemTrayMenu();
+  }
+
+  // ส่งข้อมูล Hotkey ไปยัง Native
+  Future<void> _updateNativeHotkey() async {
+    try {
+      await _platform.invokeMethod('updateHotkey', {
+        'modifier': _hotkeyModifier,
+        'key': _hotkeyKey,
+        'useCustom': _useCustomHotkey,
+      });
+      print("Dart: updateHotkey sent: $_hotkeyModifier + $_hotkeyKey, useCustom: $_useCustomHotkey");
+    } catch (e) {
+      print("Dart: Error updating native hotkey: $e");
+    }
+  }
+
+  // บันทึกการตั้งค่า
+  Future<void> _saveSetting(String key, dynamic value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    } else if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is List<String>) {
+      await prefs.setStringList(key, value);
+    }
+  }
+
+  // บันทึกประวัติการแก้คำผิด
+  Future<void> _saveHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('recentCorrections', jsonEncode(_recentCorrections));
+  }
+
+  // ตรวจสอบสิทธิ์การเข้าถึง (Accessibility)
+  Future<void> _checkAccessibilityPermission() async {
+    try {
+      final bool hasAccess = await _platform.invokeMethod('checkAccessibility');
+      if (_hasAccessibility != hasAccess) {
+        setState(() {
+          _hasAccessibility = hasAccess;
+        });
+      }
+    } catch (e) {
+      print("Error checking accessibility: $e");
+    }
+  }
+
+  // ขอสิทธิ์ Accessibility
+  Future<void> _requestAccessibilityPermission() async {
+    try {
+      final bool hasAccess = await _platform.invokeMethod('requestAccessibility');
+      setState(() {
+        _hasAccessibility = hasAccess;
+      });
+    } catch (e) {
+      print("Error requesting accessibility: $e");
+    }
+  }
+
+  // โหลดโมเดลภาษา local (llama.cpp)
+  Future<void> _initLocalLlama(String path) async {
+    if (path.isEmpty) return;
+    setState(() {
+      _isModelLoading = true;
+    });
+    try {
+      await AutocorrectEngine.initAI(path);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${AppTranslations.translate('model_prepare_failed', _displayLanguage)}$e")),
+      );
+    } finally {
+      setState(() {
+        _isModelLoading = false;
+      });
+    }
+  }
+
+  // เลือกไฟล์โมเดล GGUF
+  Future<void> _pickGgufModel() async {
+    try {
+      fp.FilePickerResult? result = await fp.FilePicker.pickFiles(
+        type: fp.FileType.custom,
+        allowedExtensions: ['gguf'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final path = result.files.single.path!;
+        setState(() {
+          _ggufModelPath = path;
+          _isAiCorrection = true; // Auto-enable AI correction once model is selected
+        });
+        _saveSetting('ggufModelPath', path);
+        _saveSetting('isAiCorrection', true);
+        await _initLocalLlama(path);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${AppTranslations.translate('model_pick_failed', _displayLanguage)}$e")),
+      );
+    }
+  }
+
+  // เช็คและเตรียมไฟล์โมเดล (คัดลอกในเครื่อง หรือดาวน์โหลดจากคลาวด์)
+  Future<String> _checkAndPrepareModel() async {
+    final directory = await getApplicationSupportDirectory();
+    final modelsDir = Directory('${directory.path}/models');
+    if (!modelsDir.existsSync()) {
+      modelsDir.createSync(recursive: true);
+    }
+    
+    final modelFile = File('${modelsDir.path}/qwen3-0.6b-instruct-q4_k_m.gguf');
+    if (modelFile.existsSync()) {
+      return modelFile.path;
+    }
+    
+    // ลองคัดลอกไฟล์พัฒนาในเครื่องผู้พัฒนาเพื่อประหยัดเน็ตก่อน
+    const devPath = '/Users/q0022/sites/TinyMind/assets/models/qwen3-0.6b-instruct-q4_k_m.gguf';
+    if (File(devPath).existsSync()) {
+      setState(() {
+        _isDownloading = true;
+        _downloadProgressText = AppTranslations.translate('model_copying_dev', _displayLanguage);
+        _downloadProgress = 0.0;
+      });
+      
+      final sourceFile = File(devPath);
+      final totalBytes = sourceFile.lengthSync();
+      final input = sourceFile.openRead();
+      final output = modelFile.openWrite();
+      int copiedBytes = 0;
+      
+      await for (var chunk in input) {
+        output.add(chunk);
+        copiedBytes += chunk.length;
+        setState(() {
+          _downloadProgress = copiedBytes / totalBytes;
+          final prefix = AppTranslations.translate('model_copying_progress', _displayLanguage);
+          _downloadProgressText = '$prefix ${(_downloadProgress * 100).toStringAsFixed(1)}% (${(copiedBytes / (1024 * 1024)).toStringAsFixed(0)} / ${(totalBytes / (1024 * 1024)).toStringAsFixed(0)} MB)';
+        });
+      }
+      await output.close();
+      
+      setState(() {
+        _isDownloading = false;
+      });
+      return modelFile.path;
+    }
+    
+    // ดาวน์โหลดจริงผ่านลิงก์ HuggingFace CDN
+    await _downloadModelFromUrl(modelFile);
+    return modelFile.path;
+  }
+
+  // ดาวน์โหลดไฟล์จากอินเทอร์เน็ตพร้อมเช็คสถานะ Progress
+  Future<void> _downloadModelFromUrl(File targetFile) async {
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+      _downloadProgressText = AppTranslations.translate('model_connecting', _displayLanguage);
+    });
+    
+    final client = http.Client();
+    try {
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://huggingface.co/leuconoe/Qwen3-0.6B-Instruct-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M-Instruct.gguf'),
+      );
+      final response = await client.send(request);
+      
+      if (response.statusCode != 200) {
+        throw Exception('ไม่สามารถดาวน์โหลดไฟล์ได้จากเซิร์ฟเวอร์ (รหัสข้อผิดพลาด HTTP ${response.statusCode})');
+      }
+      
+      final totalBytes = response.contentLength ?? 484220096;
+      int downloadedBytes = 0;
+      final sink = targetFile.openWrite();
+      
+      await for (var chunk in response.stream) {
+        sink.add(chunk);
+        downloadedBytes += chunk.length;
+        setState(() {
+          _downloadProgress = downloadedBytes / totalBytes;
+          final prefix = AppTranslations.translate('model_downloading_progress', _displayLanguage);
+          _downloadProgressText = '$prefix ${(_downloadProgress * 100).toStringAsFixed(1)}% (${(downloadedBytes / (1024 * 1024)).toStringAsFixed(0)} / ${(totalBytes / (1024 * 1024)).toStringAsFixed(0)} MB)';
+        });
+      }
+      await sink.close();
+    } catch (e) {
+      if (targetFile.existsSync()) {
+        targetFile.deleteSync();
+      }
+      rethrow;
+    } finally {
+      client.close();
+      setState(() {
+        _isDownloading = false;
+      });
+    }
+  }
+
+  // จัดการเมื่อกดปุ่มปิดหน้าต่าง (ให้ซ่อนลง System Tray แทน)
+  @override
+  void onWindowClose() async {
+    await windowManager.hide();
+  }
+
+  // ตั้งค่า System Tray
+  Future<void> _initSystemTray() async {
+    try {
+      await _systemTray.initSystemTray(
+        title: "",
+        iconPath: 'assets/tray_iconTemplate.png',
+      );
+
+      await _updateSystemTrayMenu();
+
+      _systemTray.registerSystemTrayEventHandler((eventName) {
+        if (eventName == kSystemTrayEventClick) {
+          Platform.isMacOS ? _systemTray.popUpContextMenu() : windowManager.show();
+        } else if (eventName == kSystemTrayEventRightClick) {
+          _systemTray.popUpContextMenu();
+        }
+      });
+    } catch (e) {
+      print("System Tray Initialization Error: $e");
+    }
+  }
+
+  Future<void> _updateSystemTrayMenu() async {
+    try {
+      // อัปเดต ToolTip
+      await _systemTray.setToolTip(
+        _isEnabled 
+            ? "TinyMind: ${AppTranslations.translate('active', _displayLanguage)}"
+            : "TinyMind: ${AppTranslations.translate('paused', _displayLanguage)}"
+      );
+
+      final Menu newMenu = Menu();
+      // สร้าง Menu ใหม่ตามภาษาที่เลือก
+      await newMenu.buildFrom([
+        MenuItemLabel(
+          label: AppTranslations.translate('tray_open', _displayLanguage),
+          onClicked: (menuItem) => windowManager.show(),
+        ),
+        MenuItemLabel(
+          label: _isEnabled 
+              ? AppTranslations.translate('tray_pause', _displayLanguage)
+              : AppTranslations.translate('tray_resume', _displayLanguage),
+          onClicked: (menuItem) {
+            setState(() {
+              _isEnabled = !_isEnabled;
+              _saveSetting('isEnabled', _isEnabled);
+            });
+            _updateSystemTrayMenu(); // เรียกอัปเดตเมนูอีกครั้ง
+          },
+        ),
+        MenuSeparator(),
+        MenuItemLabel(
+          label: AppTranslations.translate('tray_quit', _displayLanguage),
+          onClicked: (menuItem) => exit(0),
+        ),
+      ]);
+      
+      await _systemTray.setContextMenu(newMenu);
+    } catch (e) {
+      print("Error updating System Tray Menu: $e");
+    }
+  }
+
+  // --- Logic หลักการดักปุ่มพิมพ์ ---
+
+  void _handleKeyPress(String char) {
+    print("Dart: _handleKeyPress received: '$char'");
+    _canUndo = false; // Invalidate undo on keypress
+
+    // 1. ถ้าพิมพ์ space, enter หรือ tab ถือว่าจบบทคำปัจจุบัน
+    if (char == ' ' || char == '\n' || char == '\r' || char == '\t') {
+      if (_currentBuffer.isNotEmpty && !_isLayoutDecidedForCurrentWord) {
+        _processWordCorrection(_currentBuffer, char);
+      }
+      
+      // ชะลอการล้างสะสมตัวเคาะวรรค/จบประโยคลงในบัฟเฟอร์ เพื่อให้ปุ่ม Hotkey ทำงานได้ย้อนหลัง 1 คำ
+      _currentBuffer += char;
+    } else {
+      // 2. ถ้าเริ่มพิมพ์ตัวอักษรถัดไป ให้ล้างประวัติคำก่อนหน้าที่เคาะวรรคไปแล้ว
+      if (_currentBuffer.isNotEmpty) {
+        final lastChar = _currentBuffer.substring(_currentBuffer.length - 1);
+        if (lastChar == ' ' || lastChar == '\n' || lastChar == '\r' || lastChar == '\t') {
+          _currentBuffer = '';
+          _isLayoutDecidedForCurrentWord = false;
+        }
+      }
+
+      // ตัวอักษรปกติ -> เพิ่มเข้าบัฟเฟอร์
+      _currentBuffer += char;
+      if (!_isLayoutDecidedForCurrentWord) {
+        _checkContinuousBufferCorrection();
+      }
+    }
+  }
+
+  // สลับภาษาอัตโนมัติเมื่อความยาวตัวอักษรถึงเกณฑ์แบบสะสม (+2, +2, +2)
+  void _checkContinuousBufferCorrection() {
+    if (!_isLocalCorrection || !_isAutoSwitchOnLength) return;
+
+    final int len = _currentBuffer.length;
+    final int startLen = _autoSwitchLength;
+
+    // ตรวจสอบที่ตำแหน่งด่านต่างๆ: startLen, startLen + 2, startLen + 4, startLen + 6
+    if (len == startLen || 
+        len == startLen + 2 || 
+        len == startLen + 4 || 
+        len == startLen + 6) {
+      
+      // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผล (หากมี)
+      String trimmedWord = _currentBuffer;
+      String trailingPunctuation = '';
+      
+      final trailingRegExp = RegExp(r'([.,!?;:\-_()\[\]{}]+)$');
+      final match = trailingRegExp.firstMatch(_currentBuffer);
+      if (match != null) {
+        trailingPunctuation = match.group(1)!;
+        trimmedWord = _currentBuffer.substring(0, _currentBuffer.length - trailingPunctuation.length);
+      }
+
+      if (trimmedWord.isEmpty) return;
+
+      // ตรวจสอบว่าคำนี้อยู่ในรายการละเว้นหรือไม่
+      if (_ignoredWords.contains(trimmedWord.toLowerCase())) {
+        _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อไม่เช็คซ้ำ
+        return;
+      }
+
+      // ถ้าเป็นคำภาษาอังกฤษที่รู้จัก/ถูกต้องแล้ว ให้ล็อกสถานะและข้ามการตรวจเพิ่มทันที
+      if (AutocorrectEngine.isCommonEnglishWord(trimmedWord)) {
+        _isLayoutDecidedForCurrentWord = true;
+        print("Dart: _checkContinuousBufferCorrection: detected common English word '$trimmedWord'. Locking layout.");
+        return;
+      }
+
+      final CorrectionResult? result = AutocorrectEngine.checkAndCorrectLocalStrict(trimmedWord);
+      final String? corrected = result?.correctedWord;
+      print("Dart: _checkContinuousBufferCorrection: len=$len, buffer='$_currentBuffer', trimmed='$trimmedWord', corrected='$corrected'");
+      
+      if (corrected != null && corrected != trimmedWord && result != null) {
+        // ลบความยาวของคำในบัฟเฟอร์ ณ ตอนนี้
+        final int backspaces = _currentBuffer.length;
+        
+        final bool isThaiCorrection = result.isToTargetLanguage && result.languageCode == 'th';
+        final String translatedTrailing = AutocorrectEngine.convertLayout(
+          trailingPunctuation,
+          languageCode: result.languageCode,
+          toTarget: result.isToTargetLanguage,
+        );
+        final String replacement = corrected + translatedTrailing;
+
+        _platform.invokeMethod('replaceText', {
+          'backspaces': backspaces,
+          'text': replacement,
+        });
+
+        // เซฟข้อมูลสำหรับการ Undo
+        _lastReplacement = {
+          'original': _currentBuffer,
+          'corrected': replacement,
+        };
+        _lastReplacementEndingChar = '';
+        _canUndo = true;
+
+        // อัปเดตสถิติ
+        setState(() {
+          _wordsCorrected++;
+          _layoutFixed++;
+          _savedChars += (corrected.length - trimmedWord.length).abs();
+          
+          _recentCorrections.insert(0, {
+            'original': trimmedWord,
+            'corrected': corrected,
+            'timestamp': DateTime.now().toString().substring(11, 19),
+            'type': 'Layout (Auto)'
+          });
+          if (_recentCorrections.length > 5) {
+            _recentCorrections.removeLast();
+          }
+        });
+
+        // ล้างบัฟเฟอร์คำปัจจุบันหลังจากถูกแทนที่แล้ว
+        _currentBuffer = '';
+        _isLayoutDecidedForCurrentWord = true; // ล็อกเพื่อไม่เช็คซ้ำจนกว่าจะเว้นวรรก
+
+        // บันทึกสถิติลง DB
+        _saveSetting('wordsCorrected', _wordsCorrected);
+        _saveSetting('layoutFixed', _layoutFixed);
+        _saveSetting('savedChars', _savedChars);
+        _saveHistory();
+      } else {
+        // หากไม่สามารถแปลงสลับคีย์บอร์ดแล้วอ่านรู้เรื่อง
+        // และถ้าทดสอบความยาวสะสมจนถึงรอบสุดท้ายแล้ว (startLen + 6) ให้ล็อกสถานะหยุดเช็คไปเลยค่ะ
+        if (len >= startLen + 6) {
+          _isLayoutDecidedForCurrentWord = true;
+          print("Dart: _checkContinuousBufferCorrection: reached final checkpoint (${startLen + 6}). Locking layout.");
+        } else {
+          print("Dart: _checkContinuousBufferCorrection: ambiguous layout at len $len. Will check again at len ${len + 2}.");
+        }
+      }
+    }
+  }
+
+  bool _isPunctuation(String char) {
+    const punctuation = [',', '.', '!', '?', ';', ':', '-', '_', '(', ')'];
+    return punctuation.contains(char);
+  }
+
+  void _handleBackspace() {
+    _canUndo = false; // Invalidate undo on backspace
+    _isLayoutDecidedForCurrentWord = false; // ปลดล็อกการตรวจภาษาเมื่อกดย้อนกลับ
+    if (_currentBuffer.isNotEmpty) {
+      _currentBuffer = _currentBuffer.substring(0, _currentBuffer.length - 1);
+    } else if (_fullSentenceBuffer.isNotEmpty) {
+      _fullSentenceBuffer = _fullSentenceBuffer.substring(0, _fullSentenceBuffer.length - 1);
+    }
+  }
+
+  void _clearBuffers() {
+    _currentBuffer = '';
+    _fullSentenceBuffer = '';
+    _canUndo = false;
+    _isLayoutDecidedForCurrentWord = false;
+  }
+
+  // ประมวลผลแก้ระดับคำ (Local - Zero Latency)
+  void _processWordCorrection(String word, String endingChar) {
+    if (!_isLocalCorrection) return;
+
+    // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผลแก้คำผิด
+    String trimmedWord = word;
+    String trailingPunctuation = '';
+    
+    final trailingRegExp = RegExp(r'([.,!?;:\-_()\[\]{}]+)$');
+    final match = trailingRegExp.firstMatch(word);
+    if (match != null) {
+      trailingPunctuation = match.group(1)!;
+      trimmedWord = word.substring(0, word.length - trailingPunctuation.length);
+    }
+
+    if (trimmedWord.isEmpty) return;
+
+    // ตรวจสอบว่าคำนี้อยู่ในรายการละเว้นหรือไม่
+    if (_ignoredWords.contains(trimmedWord.toLowerCase())) return;
+
+    final CorrectionResult? result = AutocorrectEngine.checkAndCorrectLocal(trimmedWord);
+    final String? corrected = result?.correctedWord;
+    print("Dart: _processWordCorrection: word='$word', trimmed='$trimmedWord', corrected='$corrected'");
+    if (corrected != null && corrected != trimmedWord && result != null) {
+      // ส่งคำสั่งลบและพิมพ์กลับไปยัง Native
+      // ลบเท่ากับความยาวของคำผิดเดิม + 1 (สำหรับ endingChar ที่เพิ่งพิมพ์ไปหน้าจอ)
+      final int backspaces = word.length + endingChar.length;
+      
+      // แปลงแป้นพิมพ์ของตัวอักษรจบคำให้สอดคล้องกับภาษาที่ได้รับการตรวจแก้ด้วย
+      final bool isThaiCorrection = result.isToTargetLanguage && result.languageCode == 'th';
+      final String translatedTrailing = AutocorrectEngine.convertLayout(
+        trailingPunctuation,
+        languageCode: result.languageCode,
+        toTarget: result.isToTargetLanguage,
+      );
+      final String translatedEndingChar = AutocorrectEngine.convertLayout(
+        endingChar,
+        languageCode: result.languageCode,
+        toTarget: result.isToTargetLanguage,
+      );
+      final String replacement = corrected + translatedTrailing + translatedEndingChar;
+
+      _platform.invokeMethod('replaceText', {
+        'backspaces': backspaces,
+        'text': replacement,
+      });
+
+      // เซฟข้อมูลสำหรับการ Undo
+      _lastReplacement = {
+        'original': word,
+        'corrected': corrected + translatedTrailing,
+      };
+      _lastReplacementEndingChar = endingChar;
+      _canUndo = true;
+      _isLayoutDecidedForCurrentWord = true;
+
+      // อัปเดตสถิติ
+      setState(() {
+        _wordsCorrected++;
+        _layoutFixed++;
+        _savedChars += (corrected.length - trimmedWord.length).abs();
+        
+        // เพิ่มในรายการประวัติล่าสุด
+        _recentCorrections.insert(0, {
+          'original': trimmedWord,
+          'corrected': corrected,
+          'timestamp': DateTime.now().toString().substring(11, 19),
+          'type': 'Layout'
+        });
+        if (_recentCorrections.length > 5) {
+          _recentCorrections.removeLast();
+        }
+      });
+
+      // บันทึกสถิติลง DB
+      _saveSetting('wordsCorrected', _wordsCorrected);
+      _saveSetting('layoutFixed', _layoutFixed);
+      _saveSetting('savedChars', _savedChars);
+      _saveHistory();
+    }
+  }
+
+  // จัดการคีย์ลัดสำหรับแปลงภาษากลับ/สลับภาษาเอง (Hotkey Manual Fix & Undo)
+  void _handleHotkey() {
+    print("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'");
+    _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อประหยัด CPU และลดความขัดแย้ง
+    if (_canUndo && _lastReplacement != null) {
+      final original = _lastReplacement!['original']!;
+      final corrected = _lastReplacement!['corrected']!;
+      
+      // ลบคำที่เพิ่งแก้ไป แล้วเอาคำเดิมกลับมา
+      final int backspaces = corrected.length + _lastReplacementEndingChar.length;
+      final bool isThaiCorrection = RegExp(r'[ก-์]').hasMatch(original);
+      final String originalEndingChar = AutocorrectEngine.convertLayout(
+        _lastReplacementEndingChar,
+        languageCode: 'th',
+        toTarget: isThaiCorrection,
+      );
+      final String replacement = original + originalEndingChar;
+
+      _platform.invokeMethod('replaceText', {
+        'backspaces': backspaces,
+        'text': replacement,
+      });
+
+      _currentBuffer = original;
+      _canUndo = false;
+      
+      if (_fullSentenceBuffer.endsWith(corrected + _lastReplacementEndingChar)) {
+        _fullSentenceBuffer = _fullSentenceBuffer.substring(0, _fullSentenceBuffer.length - (corrected.length + _lastReplacementEndingChar.length));
+      }
+      
+      // บันทึกคำเดิมลง Dictionary/Ignore list ทันที
+      _addWordToIgnoreList(original);
+      return;
+    }
+
+    if (_currentBuffer.isNotEmpty) {
+      // แปลงคำที่กำลังพิมพ์อยู่
+      final bool isThai = RegExp(r'[ก-์]').hasMatch(_currentBuffer);
+      final converted = AutocorrectEngine.convertLayout(
+        _currentBuffer,
+        languageCode: 'th',
+        toTarget: !isThai,
+      );
+      
+      _platform.invokeMethod('replaceText', {
+        'backspaces': _currentBuffer.length,
+        'text': converted,
+      });
+      _currentBuffer = converted;
+      
+      // บันทึกคำแปลที่ถูกต้องลง Dictionary/Ignore list
+      _addWordToIgnoreList(converted);
+      return;
+    }
+
+    if (_fullSentenceBuffer.isNotEmpty) {
+      // แปลงคำสุดท้ายในประโยคที่พิมพ์ไปแล้ว
+      final trimmed = _fullSentenceBuffer.trimRight();
+      if (trimmed.isEmpty) return;
+      
+      final trailing = _fullSentenceBuffer.substring(trimmed.length);
+      final words = trimmed.split(RegExp(r'[\s\p{P}]', unicode: true));
+      if (words.isEmpty) return;
+      
+      final lastWord = words.last;
+      if (lastWord.isEmpty) return;
+      
+      final bool isThai = RegExp(r'[ก-์]').hasMatch(lastWord);
+      final converted = AutocorrectEngine.convertLayout(
+        lastWord,
+        languageCode: 'th',
+        toTarget: !isThai,
+      );
+      
+      final totalLengthToDelete = lastWord.length + trailing.length;
+      final convertedEndingChars = AutocorrectEngine.convertLayout(
+        trailing,
+        languageCode: 'th',
+        toTarget: !isThai,
+      );
+      final replacement = converted + convertedEndingChars;
+      
+      _platform.invokeMethod('replaceText', {
+        'backspaces': totalLengthToDelete,
+        'text': replacement,
+      });
+      
+      _fullSentenceBuffer = _fullSentenceBuffer.substring(0, _fullSentenceBuffer.length - totalLengthToDelete) + replacement;
+      
+      // บันทึกคำแปลที่ถูกต้องลง Dictionary/Ignore list
+      _addWordToIgnoreList(converted);
+    }
+  }
+
+  // เพิ่มคำศัพท์ลงรายการละเว้น (Ignore list / dict) โดยอัตโนมัติ
+  Future<void> _addWordToIgnoreList(String word) async {
+    final lowerWord = word.trim().toLowerCase();
+    if (lowerWord.isEmpty || lowerWord.length < 2) return;
+    if (!_ignoredWords.contains(lowerWord)) {
+      setState(() {
+        _ignoredWords.add(lowerWord);
+      });
+      await _saveSetting('ignoredWords', _ignoredWords);
+      print("Dart: Auto-added word to ignore list (dict) via hotkey: '$lowerWord'");
+    }
+  }
+
+  // ประมวลผลแก้ระดับประโยค (Context AI - Ollama API)
+  Future<void> _processSentenceCorrection(String sentence) async {
+    setState(() {
+      _aiRequests++;
+    });
+    _saveSetting('aiRequests', _aiRequests);
+
+    final String? corrected = await AutocorrectEngine.checkAndCorrectAI(sentence);
+    if (corrected != null && corrected != sentence) {
+      // แก้ไขทั้งประโยค
+      final int backspaces = sentence.length;
+      _platform.invokeMethod('replaceText', {
+        'backspaces': backspaces,
+        'text': corrected,
+      });
+
+      setState(() {
+        _wordsCorrected++;
+        _savedChars += (corrected.length - sentence.length).abs();
+
+        _recentCorrections.insert(0, {
+          'original': sentence,
+          'corrected': corrected,
+          'timestamp': DateTime.now().toString().substring(11, 19),
+          'type': 'Local AI'
+        });
+        if (_recentCorrections.length > 5) {
+          _recentCorrections.removeLast();
+        }
+      });
+
+      _saveSetting('wordsCorrected', _wordsCorrected);
+      _saveSetting('savedChars', _savedChars);
+      _saveHistory();
+      
+      // เคลียร์บัฟเฟอร์ประโยคหลังแก้ไขเสร็จ
+      _fullSentenceBuffer = '';
+    }
+  }
+
+  // --- ส่วนการสร้าง UI ---
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: _isDark
+                ? [
+                    Theme.of(context).colorScheme.background.withOpacity(0.95),
+                    const Color(0xFF1E1B4B).withOpacity(0.95), // Deep Indigo-Navy
+                  ]
+                : [
+                    const Color(0xFFF8FAFC).withOpacity(0.95), // Slate 50
+                    const Color(0xFFE2E8F0).withOpacity(0.95), // Slate 200
+                  ],
+          ),
+          border: Border.all(
+            color: _isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.08),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 30,
+              spreadRadius: 5,
+            )
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            // 1. Custom Title Bar (แถบหัวหน้าต่างลากได้)
+            _buildCustomTitleBar(),
+            
+            // 2. Main Content Layout
+            Expanded(
+              child: Row(
+                children: [
+                  // แถบเมนูด้านข้าง (Sidebar)
+                  _buildSidebar(),
+                  
+                  // หน้าจอเนื้อหาหลัก (Tab Views)
+                  Expanded(
+                    child: Container(
+                      color: _isDark ? Colors.black.withOpacity(0.15) : Colors.white.withOpacity(0.4),
+                      padding: const EdgeInsets.all(24),
+                      child: _buildActiveTabContent(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomTitleBar() {
+    return GestureDetector(
+      onPanStart: (_) => windowManager.startDragging(), // เปิดให้กดลากหน้าต่างได้
+      child: Container(
+        height: 48,
+        padding: EdgeInsets.only(left: Platform.isMacOS ? 80 : 16, right: 16),
+        decoration: BoxDecoration(
+          color: _isDark ? Colors.black.withOpacity(0.2) : Colors.white.withOpacity(0.5),
+          border: Border(
+            bottom: BorderSide(
+              color: _borderColor,
+              width: 1,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // โลโก้และชื่อแอป
+            Row(
+              children: [
+                Image.asset('assets/app_icon.png', height: 24, width: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  "TinyMind",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _isEnabled ? const Color(0xFF10B981).withOpacity(0.15) : Colors.red.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: _isEnabled ? const Color(0xFF10B981).withOpacity(0.3) : Colors.red.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Text(
+                    _isEnabled ? AppTranslations.translate('active', _displayLanguage) : AppTranslations.translate('paused', _displayLanguage),
+                    style: TextStyle(
+                      color: _isEnabled ? const Color(0xFF10B981) : Colors.red,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // ปุ่มจัดการหน้าต่าง (Window Controls)
+            Row(
+              children: [
+                // ย่อหน้าต่าง (Minimize)
+                IconButton(
+                  icon: const Icon(Icons.remove, size: 16),
+                  onPressed: () => windowManager.minimize(),
+                  splashRadius: 16,
+                  color: _textColorSecondary,
+                ),
+                // ปิดหน้าต่าง (Close - ซ่อนไปเมนู Tray)
+                IconButton(
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: () => windowManager.hide(),
+                  splashRadius: 16,
+                  color: Colors.redAccent.withOpacity(0.8),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSidebar() {
+    return Container(
+      width: 220,
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(
+            color: _borderColor,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          _buildSidebarItem(0, Icons.dashboard_rounded, AppTranslations.translate('dashboard', _displayLanguage)),
+          _buildSidebarItem(1, Icons.settings_rounded, AppTranslations.translate('settings', _displayLanguage)),
+          _buildSidebarItem(2, Icons.menu_book_rounded, AppTranslations.translate('dictionary', _displayLanguage)),
+          const Spacer(),
+          // สถานะ Accessibility Permission
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _hasAccessibility 
+                    ? const Color(0xFF10B981).withOpacity(0.05) 
+                    : Colors.amber.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _hasAccessibility 
+                      ? const Color(0xFF10B981).withOpacity(0.2) 
+                      : Colors.amber.withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _hasAccessibility ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                    color: _hasAccessibility ? const Color(0xFF10B981) : Colors.amber,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppTranslations.translate('accessibility_status', _displayLanguage),
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          _hasAccessibility ? AppTranslations.translate('accessibility_granted', _displayLanguage) : AppTranslations.translate('accessibility_needed', _displayLanguage),
+                          style: TextStyle(
+                            fontSize: 10, 
+                            color: _hasAccessibility ? (_isDark ? Colors.white60 : Colors.black54) : Colors.amber,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarItem(int index, IconData icon, String title) {
+    final bool isActive = _activeTab == index;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _activeTab = index;
+          });
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? primaryColor.withOpacity(0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isActive ? primaryColor.withOpacity(0.25) : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: isActive ? primaryColor : (_isDark ? Colors.white60 : Colors.black54),
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: isActive ? primaryColor : (_isDark ? Colors.white60 : Colors.black54),
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveTabContent() {
+    switch (_activeTab) {
+      case 0:
+        return DashboardTab(state: this);
+      case 1:
+        return SettingsTab(state: this);
+      case 2:
+        return DictionaryTab(state: this);
+      default:
+        return DashboardTab(state: this);
+    }
+  }
+}
