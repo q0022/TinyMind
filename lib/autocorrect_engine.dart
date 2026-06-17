@@ -354,7 +354,22 @@ class AutocorrectEngine {
     // สัญลักษณ์ที่จะข้าม: / \ @ ~ _ = + * ^ % $ # & | < > [ ] { } `
     final codeSymbolRegExp = RegExp(r'[/\@~_=\+\*\^%\$#&|<>\\[\]{}`]');
     if (codeSymbolRegExp.hasMatch(word)) {
-      return true;
+      // ตรวจสอบเป็นพิเศษ: ถ้าคำนี้แปลงเป็นภาษาไทยแล้วเป็นคำที่ถูกต้องหรือมีแพทเทิร์นไทยที่ถูกต้อง
+      // เราจะไม่ถือว่าเป็น Code/Symbol เพื่อให้สามารถสลับภาษาคำที่ประกอบด้วยตัวอักษร บ, ล, ฝ, ช, ู ฯลฯ ได้
+      bool isThaiWord = false;
+      for (var mapper in _mappers) {
+        final thConverted = mapper.convertToTarget(word);
+        if (thConverted != word) {
+          final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
+          if (mapper.isCommonWord(thFixed) || mapper.isValidPatternStrict(thFixed, word)) {
+            isThaiWord = true;
+            break;
+          }
+        }
+      }
+      if (!isThaiWord) {
+        return true;
+      }
     }
 
     // 2. ถ้าขึ้นต้นหรือลงท้ายด้วยเครื่องหมายคำพูด (เช่น "hello", 'world')
