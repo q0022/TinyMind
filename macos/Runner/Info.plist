@@ -32,5 +32,13 @@
 	<string>TinyMind ต้องการสิทธิ์ Accessibility เพื่อตรวจจับการพิมพ์ผิดและแก้ไขคำผิดให้คุณโดยอัตโนมัติในแอปพลิเคชันอื่นๆ ค่ะ</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/q0022/TinyMind/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>GNlVpzmFb1Qa6KwpQMSEW/ceXE0HaaAQ7foNtx8qKdk=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>7200</integer>
 </dict>
 </plist>

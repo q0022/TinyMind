@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:auto_updater/auto_updater.dart';
 import 'autocorrect_engine.dart';
 import 'language_mapper.dart';
 import 'localization.dart';
@@ -29,6 +30,7 @@ void main() async {
   LaunchAtStartup.instance.setup(
     appName: "TinyMind",
     appPath: Platform.resolvedExecutable,
+    packageName: "com.tinymind.tinymind",
   );
 
   // ตั้งค่า Window Manager
@@ -146,7 +148,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _useCustomHotkey = false;
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.2';
+  static const String currentVersion = '1.0.3';
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
@@ -269,10 +271,23 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     });
   }
 
+  Future<void> _initAutoUpdater() async {
+    if (Platform.isMacOS || Platform.isWindows) {
+      try {
+        await autoUpdater.setFeedURL('https://raw.githubusercontent.com/q0022/TinyMind/main/appcast.xml');
+        await autoUpdater.setScheduledCheckInterval(7200);
+        AppLogger.log("Sparkle AutoUpdater Initialized.");
+      } catch (e) {
+        AppLogger.log("Failed to initialize Sparkle AutoUpdater: $e");
+      }
+    }
+  }
+
   Future<void> _initApp() async {
     await _loadSettings();
     await _initSystemTray();
     await _checkAccessibilityPermission();
+    _initAutoUpdater();
     _checkForUpdates(); // เช็คเวอร์ชันอัปเดตจาก GitHub ในพื้นหลัง
   }
 
@@ -1285,7 +1300,17 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: () => _launchUrl(_latestReleaseUrl),
+                  onTap: () async {
+                    if (Platform.isMacOS || Platform.isWindows) {
+                      try {
+                        await autoUpdater.checkForUpdates();
+                      } catch (e) {
+                        _launchUrl(_latestReleaseUrl);
+                      }
+                    } else {
+                      _launchUrl(_latestReleaseUrl);
+                    }
+                  },
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

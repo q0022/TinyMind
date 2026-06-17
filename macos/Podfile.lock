@@ -1,20 +1,33 @@
 PODS:
+  - auto_updater_macos (0.0.1):
+    - FlutterMacOS
+    - Sparkle
   - FlutterMacOS (1.0.0)
+  - Sparkle (2.9.3)
   - system_tray (0.0.1):
     - FlutterMacOS
 
 DEPENDENCIES:
+  - auto_updater_macos (from `Flutter/ephemeral/.symlinks/plugins/auto_updater_macos/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - system_tray (from `Flutter/ephemeral/.symlinks/plugins/system_tray/macos`)
 
+SPEC REPOS:
+  trunk:
+    - Sparkle
+
 EXTERNAL SOURCES:
+  auto_updater_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/auto_updater_macos/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
   system_tray:
     :path: Flutter/ephemeral/.symlinks/plugins/system_tray/macos
 
 SPEC CHECKSUMS:
+  auto_updater_macos: 3a42f1a06be6981f1a18be37e6e7bf86aa732118
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  Sparkle: 39dbdf28637f6056fbf5ee6494bdbfae54f49f41
   system_tray: 53f0cdb020c3fbee711d3fe45ae7ce730e033d2b
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009

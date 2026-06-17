@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>TinyMind Updates</title>
+    <item>
+      <title>Version 1.0.3</title>
+      <sparkle:releaseNotesLink>https://github.com/q0022/TinyMind/releases/tag/v1.0.3</sparkle:releaseNotesLink>
+      <pubDate>Wed, 17 Jun 2026 09:00:00 +0700</pubDate>
+      <enclosure url="https://github.com/q0022/TinyMind/releases/download/v1.0.3/TinyMind-macOS.zip"
+                 sparkle:version="1.0.3"
+                 sparkle:shortVersionString="1.0.3"
+                 sparkle:edSignature="5uTDF5ntwZ/igqoXciymsB6ayFJy0CKu1r+X2SBpetIP2TkeQEOR1MTPEA520EzPexRFVMgVDpu8q/ZS8u/9CQ=="
+                 length="21866052"
+                 type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
