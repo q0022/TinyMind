@@ -18,6 +18,7 @@ class AppTranslations {
       'stat_layout_fixed': 'สลับภาษา Layout',
       'stat_ai_requests': 'เรียกประมวลผล AI',
       'stat_saved_chars': 'ประหยัดตัวอักษรพิมพ์',
+      'stat_hotkey_used': 'สลับด้วย Hotkey',
       'recent_activity': 'ประวัติการทำงานล่าสุด (Recent Activity)',
       'empty_history': 'ยังไม่มีประวัติการแก้ไขคำผิดในรอบนี้ค่ะ พิมพ์เพื่อทดสอบได้เลยนะ!',
       
@@ -130,6 +131,7 @@ class AppTranslations {
       'stat_layout_fixed': 'Layouts Switched',
       'stat_ai_requests': 'AI Inferences',
       'stat_saved_chars': 'Saved Keystrokes',
+      'stat_hotkey_used': 'Hotkey Used',
       'recent_activity': 'Recent Activity',
       'empty_history': 'No correction history yet. Type something to test!',
       

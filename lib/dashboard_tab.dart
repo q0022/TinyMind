@@ -34,6 +34,8 @@ class DashboardTab extends StatelessWidget {
             _buildStatCard(AppTranslations.translate('stat_ai_requests', state._displayLanguage), "${state._aiRequests}", Icons.psychology, Colors.purpleAccent),
             const SizedBox(width: 16),
             _buildStatCard(AppTranslations.translate('stat_saved_chars', state._displayLanguage), "${state._savedChars}", Icons.electric_bolt, Colors.amber),
+            const SizedBox(width: 16),
+            _buildStatCard(AppTranslations.translate('stat_hotkey_used', state._displayLanguage), "${state._hotkeyCount}", Icons.keyboard_command_key, Colors.deepOrangeAccent),
           ],
         ),
         

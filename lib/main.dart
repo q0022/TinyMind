@@ -218,6 +218,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   int _layoutFixed = 0;
   int _aiRequests = 0;
   int _savedChars = 0;
+  int _hotkeyCount = 0;
 
   // ตัวแปร UI & Buffer
   String _currentBuffer = '';
@@ -492,6 +493,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _layoutFixed = prefs.getInt('layoutFixed') ?? 0;
       _aiRequests = prefs.getInt('aiRequests') ?? 0;
       _savedChars = prefs.getInt('savedChars') ?? 0;
+      _hotkeyCount = prefs.getInt('hotkeyCount') ?? 0;
 
       // โหลดคำข้าม
       _ignoredWords = prefs.getStringList('ignoredWords') ?? [];
@@ -1103,7 +1105,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   // จัดการคีย์ลัดสำหรับแปลงภาษากลับ/สลับภาษาเอง (Hotkey Manual Fix & Undo)
   void _handleHotkey() {
-    AppLogger.log("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'");
+    setState(() {
+      _hotkeyCount++;
+    });
+    _saveSetting('hotkeyCount', _hotkeyCount);
+    AppLogger.log("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'. Total hotkey triggers: $_hotkeyCount");
     _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อประหยัด CPU และลดความขัดแย้ง
     // 1. ลองดึงข้อมูลจากการแทนที่ล่าสุดเพื่อทำ Smart Undo (กู้คืนย้อนหลังทั้งคำ)
     // ถึงแม้จะพิมพ์ตัวอักษรเพิ่มไปแล้ว 1-2 ตัวหลังจากโดนแอปแก้ไข หากบัฟเฟอร์ยังขึ้นต้นด้วยคำที่แอปแก้
