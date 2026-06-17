@@ -153,7 +153,25 @@ ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_NAME"
 # Create distribution DMG image
 echo "🖼️ Creating final DMG $DMG_NAME..."
 rm -f "$DMG_NAME"
-hdiutil create -volname "TinyMind" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_NAME"
+
+# Create a temporary directory for DMG contents
+DMG_TEMP_DIR="build/macos/Build/Products/Release/dmg_temp"
+rm -rf "$DMG_TEMP_DIR"
+mkdir -p "$DMG_TEMP_DIR"
+
+# Copy the app bundle to the temp directory
+echo "  Copying app bundle to temp directory..."
+ditto "$APP_PATH" "$DMG_TEMP_DIR/TinyMind.app"
+
+# Create symlink to /Applications inside the temp directory
+echo "  Creating symlink to /Applications..."
+ln -s /Applications "$DMG_TEMP_DIR/Applications"
+
+# Create the DMG using the temp directory as srcfolder
+hdiutil create -volname "TinyMind" -srcfolder "$DMG_TEMP_DIR" -ov -format UDZO "$DMG_NAME"
+
+# Clean up temp directory
+rm -rf "$DMG_TEMP_DIR"
 
 # 6️⃣ Generate Sparkle update signature
 echo "🔑 Generating Sparkle update signature for $ZIP_NAME..."
