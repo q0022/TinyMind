@@ -1,6 +1,6 @@
 # TinyMind 🚀
 
-**TinyMind** is a lightweight, locally‑run AI‑enhanced keyboard input tool for macOS. It captures your keystrokes, applies on‑the‑fly layout correction using a compact LLM (Qwen3‑0.6B‑Instruct) running on Apple Metal, and delivers a smoother typing experience without any network latency.
+**TinyMind** is a lightweight, locally‑run AI‑enhanced keyboard input tool for macOS. It captures your keystrokes, applies on‑the‑fly layout correction using a compact LLM (SmolLM2-360M-Instruct) running on Apple Metal, and delivers a smoother typing experience without any network latency.
 
 ---
 
@@ -8,7 +8,7 @@
 
 - **Local AI inference** – No internet required; runs entirely on your Mac’s GPU (Apple Metal).
 - **Deferred buffer clearing** – Allows hot‑key‑triggered correction immediately after a space or enter.
-- **Fast, low‑memory footprint** – Only ~456 MiB of GPU memory used.
+- **Fast, low‑memory footprint** – Only ~100 MiB of GPU memory used (Metal Compute Buffer is only 99.75 MiB).
 - **Easy hot‑key configuration** – Customize hot‑keys via the macOS menu bar.
 - **Open‑source** – Fully available on GitHub, ready for you to fork or contribute.
 
@@ -49,8 +49,6 @@ Pre‑built release binaries are available as **.dmg** and **.zip** files. Downl
 - The **deferred buffer clear** ensures that a space does **not** clear the buffer until the first character of the next word is typed, preserving hot‑key responsiveness.
 
 ---
-
-## 🙏 Credits
 
 ## 🙏 Credits
 
