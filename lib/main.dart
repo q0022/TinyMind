@@ -237,6 +237,12 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   List<String> _ignoredWords = [];
   final TextEditingController _ignoreWordController = TextEditingController();
 
+  // คีย์ลัดคำย่อ (Text Shortcuts Expansion)
+  Map<String, String> _textShortcuts = {};
+  final TextEditingController _shortcutKeyController = TextEditingController();
+  final TextEditingController _shortcutValueController = TextEditingController();
+  int _dictionarySubTab = 0; // 0: Ignore List, 1: Text Shortcuts
+
   @override
   void initState() {
     super.initState();
@@ -512,6 +518,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _isDarkMode = prefs.getBool('isDarkMode') ?? true;
       _primaryColorValue = prefs.getInt('primaryColorValue') ?? 0xFF6366F1;
       _displayLanguage = prefs.getString('displayLanguage') ?? 'th';
+      
+      // โหลดคีย์ลัดคำย่อ
+      final shortcutsJson = prefs.getString('textShortcuts') ?? '{}';
+      try {
+        _textShortcuts = Map<String, String>.from(jsonDecode(shortcutsJson));
+      } catch (e) {
+        _textShortcuts = {};
+      }
     });
 
     // อัปเดต Hotkey ไปยังฝั่ง Native
@@ -963,9 +977,50 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _canUndo = false;
     _isLayoutDecidedForCurrentWord = false;
   }
-
   // ประมวลผลแก้ระดับคำ (Local - Zero Latency)
   void _processWordCorrection(String word, String endingChar) {
+    // 0. ตรวจสอบคีย์ลัดคำย่อ (Text Shortcuts Expansion) ก่อนการแปลงภาษาอื่นๆ
+    final shortcutKey = word.trim();
+    if (_textShortcuts.containsKey(shortcutKey)) {
+      final replacement = _textShortcuts[shortcutKey]! + endingChar;
+      final int backspaces = word.length + endingChar.length;
+
+      _platform.invokeMethod('replaceText', {
+        'backspaces': backspaces,
+        'text': replacement,
+      });
+
+      setState(() {
+        _wordsCorrected++;
+        _savedChars += (replacement.length - word.length - endingChar.length).abs();
+
+        _recentCorrections.insert(0, {
+          'original': word,
+          'corrected': _textShortcuts[shortcutKey]!,
+          'timestamp': DateTime.now().toString().substring(11, 19),
+          'type': 'Shortcut'
+        });
+        if (_recentCorrections.length > 5) {
+          _recentCorrections.removeLast();
+        }
+      });
+
+      // เซฟข้อมูลสำหรับการ Undo
+      _lastReplacement = {
+        'original': word,
+        'corrected': _textShortcuts[shortcutKey]!,
+      };
+      _lastReplacementEndingChar = endingChar;
+      _canUndo = true;
+
+      _currentBuffer = replacement;
+      _isLayoutDecidedForCurrentWord = true;
+      _saveSetting('wordsCorrected', _wordsCorrected);
+      _saveSetting('savedChars', _savedChars);
+      _saveHistory();
+      return;
+    }
+
     if (!_isLocalCorrection) return;
 
     // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผลแก้คำผิด
@@ -1196,6 +1251,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       await _saveSetting('ignoredWords', _ignoredWords);
       AppLogger.log("Dart: Auto-added word to ignore list (dict) via hotkey: '$lowerWord'");
     }
+  }
+
+  Future<void> _saveShortcuts() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('textShortcuts', jsonEncode(_textShortcuts));
   }
 
   // ประมวลผลแก้ระดับประโยค (Context AI - Ollama API)

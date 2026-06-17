@@ -75,6 +75,41 @@ class AutocorrectEngine {
   // คลังคำศัพท์ภาษาอังกฤษเพิ่มเติมของผู้ใช้ (เรียนรู้จากการกู้คืนด้วย Hotkey)
   static final Set<String> userEnWords = {};
 
+  // พจนานุกรมคำสะกดผิดทั่วไป (ไทย-อังกฤษ)
+  static const Map<String, String> _commonTypos = {
+    // คำผิดภาษาไทยยอดนิยม
+    'สังเกตุ': 'สังเกต',
+    'เว็ปไซต์': 'เว็บไซต์',
+    'กระเพรา': 'กะเพรา',
+    'กฏ': 'กฎ',
+    'ระชาชน': 'ประชาชน',
+    'กิตติกรรมประกาศ': 'กิตติประกาศ',
+    
+    // คำผิดภาษาอังกฤษยอดนิยม
+    'recieve': 'receive',
+    'definately': 'definitely',
+    'teh': 'the',
+    'wont': 'won\'t',
+    'cant': 'can\'t',
+    'dont': 'don\'t',
+    'seperate': 'separate',
+    'occured': 'occurred',
+    'unil': 'until',
+  };
+
+  static String? _getCommonTypoCorrection(String word) {
+    final lower = word.toLowerCase();
+    if (_commonTypos.containsKey(lower)) {
+      final corrected = _commonTypos[lower]!;
+      // Match casing of original word
+      if (word.isNotEmpty && word[0] == word[0].toUpperCase()) {
+        return corrected[0].toUpperCase() + corrected.substring(1);
+      }
+      return corrected;
+    }
+    return null;
+  }
+
   // ตัวแปรเก็บ Llama Instance
   static Llama? _llama;
   static String? _loadedModelPath;
@@ -171,6 +206,17 @@ class AutocorrectEngine {
       return null;
     }
 
+    // 0. ตรวจสอบคำสะกดผิดสะสมโดยตรง (Spelling correction)
+    final directTypo = _getCommonTypoCorrection(word);
+    if (directTypo != null) {
+      final isThai = RegExp(r'[ก-์]').hasMatch(directTypo);
+      return CorrectionResult(
+        correctedWord: directTypo,
+        languageCode: isThai ? 'th' : 'en',
+        isToTargetLanguage: isThai,
+      );
+    }
+
     // 1. ตรวจสอบกรณีพิมพ์ไทยผสมอังกฤษ (สลับเลย์เอาต์กลางคำ) หรือลืมเปลี่ยนภาษาแบบผสม
     // ลองแปลงเป็นภาษาอังกฤษดู
     for (var mapper in _mappers) {
@@ -179,10 +225,11 @@ class AutocorrectEngine {
         if (_isThaiBypassWord(word)) {
           continue;
         }
-        if (_commonEnWords.contains(enConverted.toLowerCase()) || 
-            userEnWords.contains(enConverted.toLowerCase())) {
+        final enFixed = _getCommonTypoCorrection(enConverted) ?? enConverted;
+        if (_commonEnWords.contains(enFixed.toLowerCase()) || 
+            userEnWords.contains(enFixed.toLowerCase())) {
           return CorrectionResult(
-            correctedWord: enConverted,
+            correctedWord: enFixed,
             languageCode: mapper.languageCode,
             isToTargetLanguage: false,
           );
@@ -194,19 +241,20 @@ class AutocorrectEngine {
     for (var mapper in _mappers) {
       final thConverted = mapper.convertToTarget(word);
       if (thConverted != word) {
-        if (mapper.isCommonWord(thConverted) || mapper.isValidPattern(thConverted)) {
+        final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
+        if (mapper.isCommonWord(thFixed) || mapper.isValidPattern(thFixed)) {
           // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายหรือมีรูปแบบปกติอยู่แล้ว
           if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
             if (_commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase())) {
               continue;
             }
-            if (!mapper.isCommonWord(thConverted) && word.length >= 4) {
+            if (!mapper.isCommonWord(thFixed) && word.length >= 4) {
               continue; // ไม่แปลงคำอังกฤษยาวๆ ที่ไม่ใช่คำไทยยอดนิยม เพื่อป้องกัน False Positive
             }
           }
 
           return CorrectionResult(
-            correctedWord: thConverted,
+            correctedWord: thFixed,
             languageCode: mapper.languageCode,
             isToTargetLanguage: true,
           );
@@ -236,6 +284,17 @@ class AutocorrectEngine {
       return null;
     }
 
+    // 0. ตรวจสอบคำสะกดผิดสะสมโดยตรง (Spelling correction)
+    final directTypo = _getCommonTypoCorrection(word);
+    if (directTypo != null) {
+      final isThai = RegExp(r'[ก-์]').hasMatch(directTypo);
+      return CorrectionResult(
+        correctedWord: directTypo,
+        languageCode: isThai ? 'th' : 'en',
+        isToTargetLanguage: isThai,
+      );
+    }
+
     // 1. ลองแปลงเป็นภาษาอังกฤษก่อน
     for (var mapper in _mappers) {
       final enConverted = mapper.convertFromTarget(word);
@@ -243,9 +302,10 @@ class AutocorrectEngine {
         if (_isThaiBypassWord(word)) {
           continue;
         }
-        if (_commonEnWords.contains(enConverted.toLowerCase()) || userEnWords.contains(enConverted.toLowerCase())) {
+        final enFixed = _getCommonTypoCorrection(enConverted) ?? enConverted;
+        if (_commonEnWords.contains(enFixed.toLowerCase()) || userEnWords.contains(enFixed.toLowerCase())) {
           return CorrectionResult(
-            correctedWord: enConverted,
+            correctedWord: enFixed,
             languageCode: mapper.languageCode,
             isToTargetLanguage: false,
           );
@@ -257,19 +317,20 @@ class AutocorrectEngine {
     for (var mapper in _mappers) {
       final thConverted = mapper.convertToTarget(word);
       if (thConverted != word) {
-        if (mapper.isCommonWord(thConverted) || mapper.isValidPatternStrict(thConverted, word)) {
+        final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
+        if (mapper.isCommonWord(thFixed) || mapper.isValidPatternStrict(thFixed, word)) {
           // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายอยู่แล้ว
           if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
             if (_commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase())) {
               continue;
             }
-            if (!mapper.isCommonWord(thConverted) && word.length >= 4) {
+            if (!mapper.isCommonWord(thFixed) && word.length >= 4) {
               continue;
             }
           }
 
           return CorrectionResult(
-            correctedWord: thConverted,
+            correctedWord: thFixed,
             languageCode: mapper.languageCode,
             isToTargetLanguage: true,
           );

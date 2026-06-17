@@ -65,11 +65,19 @@ class AppTranslations {
       'auto_switch_hint': 'ช่วงที่แนะนำคือ 8 ตัวอักษร (หากสั้นเกินไปอาจทำให้สลับผิดพลาดสำหรับคำศัพท์ภาษาอังกฤษทั่วไป)',
       
       // Dictionary Tab
-      'dict_title': 'คลังคำละเว้น (Ignore List)',
-      'dict_subtitle': 'ใส่คำศัพท์ที่คุณไม่ต้องการให้ TinyMind เข้าไปดัดแปลงหรือแก้ไข (เช่น ชื่อเฉพาะ รหัส โค้ด)',
+      'dict_title': 'การจัดการคำและคีย์ลัด',
+      'dict_subtitle': 'จัดการรายการคำละเว้นจากการสลับแป้นพิมพ์ หรือคำย่อส่วนตัวสำหรับอำนวยความสะดวกในการพิมพ์',
+      'dict_tab_ignore': 'คำละเว้น (Ignore List)',
+      'dict_tab_shortcuts': 'คีย์ลัดคำย่อ (Text Shortcuts)',
       'dict_input_hint': 'พิมพ์คำละเว้น เช่น api, admin, db, เจน, boy',
       'dict_add_btn': 'เพิ่มคำศัพท์',
       'dict_empty': 'ยังไม่มีคำศัพท์ละเว้นในขณะนี้ค่ะ',
+      'shortcut_key_label': 'คำย่อ (เช่น tm)',
+      'shortcut_val_label': 'คำเต็ม (เช่น TinyMind)',
+      'shortcut_key_hint': 'คำย่อ',
+      'shortcut_val_hint': 'คำเต็มสำหรับการขยายความ',
+      'shortcut_add_btn': 'เพิ่มคีย์ลัด',
+      'shortcut_empty': 'ยังไม่มีคีย์ลัดคำย่อในขณะนี้ค่ะ',
       
       // Dialogs
       'model_prepare_failed': 'เตรียมโมเดลล้มเหลว: ',
@@ -169,11 +177,19 @@ class AppTranslations {
       'auto_switch_hint': '8 characters is recommended to prevent false switches on English words',
       
       // Dictionary Tab
-      'dict_title': 'Ignore List',
-      'dict_subtitle': 'Words you want to exclude from autocorrection (e.g., proper nouns, codes, IDs)',
+      'dict_title': 'Words & Shortcuts',
+      'dict_subtitle': 'Manage words excluded from layout switching, or custom text abbreviations',
+      'dict_tab_ignore': 'Ignore List',
+      'dict_tab_shortcuts': 'Text Shortcuts',
       'dict_input_hint': 'Type ignored word (e.g. api, admin, db, boy)',
       'dict_add_btn': 'Add Word',
       'dict_empty': 'No ignored words yet.',
+      'shortcut_key_label': 'Abbreviation (e.g. tm)',
+      'shortcut_val_label': 'Expansion (e.g. TinyMind)',
+      'shortcut_key_hint': 'Abbrev',
+      'shortcut_val_hint': 'Expansion text',
+      'shortcut_add_btn': 'Add Shortcut',
+      'shortcut_empty': 'No custom shortcuts yet.',
       
       // Dialogs
       'model_prepare_failed': 'Model preparation failed: ',
