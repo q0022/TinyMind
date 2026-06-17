@@ -148,7 +148,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _useCustomHotkey = false;
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.3';
+  static const String currentVersion = '1.0.5';
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
@@ -371,19 +371,25 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _isLocalCorrection = prefs.getBool('isLocalCorrection') ?? true;
       _isAiCorrection = prefs.getBool('isAiCorrection') ?? false;
       _ggufModelPath = prefs.getString('ggufModelPath') ?? '';
-      // หากยังคงเป็นโมเดลตัวเก่า ให้รีเซ็ตทิ้งเพื่อบังคับอัปเกรดเป็น qwen3-0.6b
-      if (!_ggufModelPath.contains('qwen3-0.6b') || _ggufModelPath.isEmpty) {
+      
+      // การย้ายระบบผู้ใช้เก่า (Migration): หากใช้ qwen3-0.6b หรือรุ่นเก่า ให้เคลียร์เพื่อเปลี่ยนเป็น smollm2
+      // และลบไฟล์เก่าทิ้งเพื่อคืนพื้นที่ดิสก์ให้ผู้ใช้งาน
+      if (_ggufModelPath.isNotEmpty && 
+          (_ggufModelPath.contains('qwen3-0.6b') || 
+           _ggufModelPath.contains('qwen3-1.7b') || 
+           _ggufModelPath.contains('qwen3.5'))) {
+        final oldFile = File(_ggufModelPath);
+        if (oldFile.existsSync()) {
+          try { oldFile.deleteSync(); } catch (_) {}
+        }
         _ggufModelPath = '';
         _saveSetting('ggufModelPath', '');
       }
-      // ตรวจสอบว่าไฟล์โมเดลมีอยู่จริงและมีขนาดสมบูรณ์หรือไม่ (อย่างน้อย 300 MB สำหรับ Qwen3-0.6B)
+
+      // ตรวจสอบว่าไฟล์โมเดลมีอยู่จริงหรือไม่
       if (_ggufModelPath.isNotEmpty) {
         final file = File(_ggufModelPath);
-        if (!file.existsSync() || file.lengthSync() < 300 * 1024 * 1024) {
-          // หากไฟล์ไม่มีอยู่จริงหรือดาวน์โหลดไม่เสร็จ (ขนาดเล็กเกินไป) ให้ลบไฟล์และเคลียร์ค่า
-          if (file.existsSync()) {
-            try { file.deleteSync(); } catch (_) {}
-          }
+        if (!file.existsSync()) {
           _ggufModelPath = '';
           _saveSetting('ggufModelPath', '');
         }
@@ -399,7 +405,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       // ค้นหาโมเดลในเครื่องโดยอัตโนมัติหากยังไม่ได้ตั้งค่า
       if (_ggufModelPath.isEmpty) {
         getApplicationSupportDirectory().then((dir) {
-          final modelFile = File('${dir.path}/models/qwen3-0.6b-instruct-q4_k_m.gguf');
+          final modelFile = File('${dir.path}/models/smollm2-360m-instruct-q4_k_m.gguf');
           if (modelFile.existsSync()) {
             setState(() {
               _ggufModelPath = modelFile.path;
@@ -407,7 +413,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
             _saveSetting('ggufModelPath', modelFile.path);
           } else {
             // เช็คในโฟลเดอร์พัฒนาของเครื่องพี่บอยเพื่อความรวดเร็วในการทดสอบ
-            const devPath = '/Users/q0022/sites/TinyMind/assets/models/qwen3-0.6b-instruct-q4_k_m.gguf';
+            const devPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
             if (File(devPath).existsSync()) {
               setState(() {
                 _ggufModelPath = devPath;
@@ -578,13 +584,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       modelsDir.createSync(recursive: true);
     }
     
-    final modelFile = File('${modelsDir.path}/qwen3-0.6b-instruct-q4_k_m.gguf');
+    final modelFile = File('${modelsDir.path}/smollm2-360m-instruct-q4_k_m.gguf');
     if (modelFile.existsSync()) {
       return modelFile.path;
     }
     
     // ลองคัดลอกไฟล์พัฒนาในเครื่องผู้พัฒนาเพื่อประหยัดเน็ตก่อน
-    const devPath = '/Users/q0022/sites/TinyMind/assets/models/qwen3-0.6b-instruct-q4_k_m.gguf';
+    const devPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
     if (File(devPath).existsSync()) {
       setState(() {
         _isDownloading = true;
@@ -632,7 +638,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     try {
       final request = http.Request(
         'GET',
-        Uri.parse('https://huggingface.co/leuconoe/Qwen3-0.6B-Instruct-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M-Instruct.gguf'),
+        Uri.parse('https://huggingface.co/unsloth/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf'),
       );
       final response = await client.send(request);
       
@@ -640,7 +646,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         throw Exception('ไม่สามารถดาวน์โหลดไฟล์ได้จากเซิร์ฟเวอร์ (รหัสข้อผิดพลาด HTTP ${response.statusCode})');
       }
       
-      final totalBytes = response.contentLength ?? 484220096;
+      final totalBytes = response.contentLength ?? 271000000;
       int downloadedBytes = 0;
       final sink = targetFile.openWrite();
       
@@ -744,7 +750,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
     // 1. ถ้าพิมพ์ space, enter หรือ tab ถือว่าจบบทคำปัจจุบัน
     if (char == ' ' || char == '\n' || char == '\r' || char == '\t') {
-      if (_currentBuffer.isNotEmpty && !_isLayoutDecidedForCurrentWord) {
+      if (char == '\n' || char == '\r') {
+        // หากกด Enter/Return ให้เคลียร์บัฟเฟอร์ทันทีและไม่ทำการแก้ไข เพื่อป้องกัน Race Condition ในแอปแชท
+        _clearBuffers();
+        return;
+      }
+      if (_currentBuffer.isNotEmpty && 
+          !_isLayoutDecidedForCurrentWord && 
+          !RegExp(r'\s$').hasMatch(_currentBuffer)) {
         _processWordCorrection(_currentBuffer, char);
       }
       
@@ -850,8 +863,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           }
         });
 
-        // ล้างบัฟเฟอร์คำปัจจุบันหลังจากถูกแทนที่แล้ว
-        _currentBuffer = '';
+        // แทนที่จะล้างบัฟเฟอร์ ให้เก็บคำที่ได้รับการแทนที่ล่าสุดไว้ เพื่อรองรับการพิมพ์ต่อหรือกด Hotkey แปลงกลับทั้งคำ
+        _currentBuffer = replacement;
         _isLayoutDecidedForCurrentWord = true; // ล็อกเพื่อไม่เช็คซ้ำจนกว่าจะเว้นวรรก
 
         // บันทึกสถิติลง DB
@@ -980,35 +993,69 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   void _handleHotkey() {
     AppLogger.log("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'");
     _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อประหยัด CPU และลดความขัดแย้ง
-    if (_canUndo && _lastReplacement != null) {
+    // 1. ลองดึงข้อมูลจากการแทนที่ล่าสุดเพื่อทำ Smart Undo (กู้คืนย้อนหลังทั้งคำ)
+    // ถึงแม้จะพิมพ์ตัวอักษรเพิ่มไปแล้ว 1-2 ตัวหลังจากโดนแอปแก้ไข หากบัฟเฟอร์ยังขึ้นต้นด้วยคำที่แอปแก้
+    // เราจะดึงคีย์ดั้งเดิมทั้งหมดพร้อมแปลงตัวต่อท้ายกลับคืนให้ทั้งยวง
+    if (_lastReplacement != null) {
       final original = _lastReplacement!['original']!;
       final corrected = _lastReplacement!['corrected']!;
       
-      // ลบคำที่เพิ่งแก้ไป แล้วเอาคำเดิมกลับมา
-      final int backspaces = corrected.length + _lastReplacementEndingChar.length;
-      final bool isThaiCorrection = RegExp(r'[ก-์]').hasMatch(original);
-      final String originalEndingChar = AutocorrectEngine.convertLayout(
-        _lastReplacementEndingChar,
-        languageCode: 'th',
-        toTarget: isThaiCorrection,
-      );
-      final String replacement = original + originalEndingChar;
+      // กรณีแรก: canUndo ยังเป็น true (กดสลับกลับทันทีที่โปรแกรมแทนที่เสร็จ)
+      if (_canUndo && _currentBuffer == corrected) {
+        final int backspaces = corrected.length + _lastReplacementEndingChar.length;
+        final bool isThaiCorrection = RegExp(r'[ก-์]').hasMatch(original);
+        final String originalEndingChar = AutocorrectEngine.convertLayout(
+          _lastReplacementEndingChar,
+          languageCode: 'th',
+          toTarget: isThaiCorrection,
+        );
+        final String replacement = original + originalEndingChar;
 
-      _platform.invokeMethod('replaceText', {
-        'backspaces': backspaces,
-        'text': replacement,
-      });
+        _platform.invokeMethod('replaceText', {
+          'backspaces': backspaces,
+          'text': replacement,
+        });
 
-      _currentBuffer = original;
-      _canUndo = false;
-      
-      if (_fullSentenceBuffer.endsWith(corrected + _lastReplacementEndingChar)) {
-        _fullSentenceBuffer = _fullSentenceBuffer.substring(0, _fullSentenceBuffer.length - (corrected.length + _lastReplacementEndingChar.length));
+        _currentBuffer = original;
+        _canUndo = false;
+        
+        if (_fullSentenceBuffer.endsWith(corrected + _lastReplacementEndingChar)) {
+          _fullSentenceBuffer = _fullSentenceBuffer.substring(0, _fullSentenceBuffer.length - (corrected.length + _lastReplacementEndingChar.length));
+        }
+        
+        _addWordToIgnoreList(original);
+        return;
       }
       
-      // บันทึกคำเดิมลง Dictionary/Ignore list ทันที
-      _addWordToIgnoreList(original);
-      return;
+      // กรณีสอง: พิมพ์ต่อไปบ้างแล้ว แต่ยังไม่เว้นวรรค (บัฟเฟอร์ปัจจุบันขึ้นต้นด้วยคำที่แอปแก้)
+      if (_currentBuffer.startsWith(corrected)) {
+        final extra = _currentBuffer.substring(corrected.length);
+        final bool isThaiCorrection = RegExp(r'[ก-์]').hasMatch(original);
+        
+        // แปลงส่วนต่อท้ายกลับไปตามภาษาเดิมของคำดั้งเดิม
+        final String convertedExtra = AutocorrectEngine.convertLayout(
+          extra,
+          languageCode: 'th',
+          toTarget: isThaiCorrection,
+        );
+        
+        final String replacement = original + convertedExtra;
+        final int backspaces = _currentBuffer.length;
+
+        _platform.invokeMethod('replaceText', {
+          'backspaces': backspaces,
+          'text': replacement,
+        });
+
+        _currentBuffer = replacement;
+        _lastReplacement = null;
+        _canUndo = false;
+        
+        // บันทึกคำทั้งสองเวอร์ชันลง Ignore list
+        _addWordToIgnoreList(original);
+        _addWordToIgnoreList(replacement);
+        return;
+      }
     }
 
     if (_currentBuffer.isNotEmpty) {

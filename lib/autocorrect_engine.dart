@@ -18,7 +18,7 @@ class AutocorrectEngine {
     'bring', 'brought', 'build', 'built', 'busy', 'but', 'button', 'by', 'call', 'called', 'came', 'can', 'cancel', 'cannot', 'capslock',
     'card', 'cards', 'case', 'cause', 'center', 'certain', 'change', 'chat', 'check', 'child', 'children', 'class', 'clear', 'client', 'close',
     'code', 'color', 'column', 'come', 'compile', 'config', 'configuration', 'console', 'const', 'could', 'count', 'course', 'cpp', 'create', 'csharp',
-    'css', 'cut', 'dart', 'data', 'database', 'day', 'debug', 'deepmind', 'delete', 'deploy', 'descendant', 'design', 'detail', 'details', 'dev',
+    'css', 'cut', 'dart', 'data', 'database', 'day', 'db', 'debug', 'deepmind', 'delete', 'deploy', 'descendant', 'design', 'detail', 'details', 'dev',
     'developer', 'development', 'device', 'did', 'differ', 'different', 'directory', 'do', 'does', 'done', 'double', 'down', 'draw', 'during', 'each',
     'early', 'earth', 'ease', 'east', 'easy', 'eat', 'either', 'else', 'end', 'enough', 'env', 'environment', 'error', 'even', 'evenly',
     'ever', 'every', 'everyone', 'everything', 'example', 'export', 'face', 'facebook', 'fact', 'failure', 'fall', 'far', 'fast', 'feel', 'few',
@@ -27,8 +27,8 @@ class AutocorrectEngine {
     'github', 'gitlab', 'give', 'given', 'go', 'golang', 'gold', 'good', 'google', 'got', 'graphql', 'great', 'green', 'grid', 'ground',
     'group', 'grow', 'grpc', 'guest', 'had', 'half', 'hand', 'happen', 'hard', 'has', 'have', 'he', 'head', 'hear', 'heard',
     'height', 'held', 'hello', 'help', 'her', 'here', 'high', 'him', 'himself', 'his', 'hold', 'home', 'hot',
-    'hour', 'house', 'how', 'however', 'html', 'http', 'https', 'hundred', 'i', 'icon', 'idea', 'if', 'ig', 'image', 'import',
-    'important', 'in', 'inches', 'ind', 'index', 'info', 'init', 'instagram', 'install', 'integer', 'intel', 'internet', 'into', 'ios', 'is',
+    'hour', 'house', 'how', 'however', 'html', 'http', 'https', 'hundred', 'i', 'icon', 'id', 'idea', 'if', 'ig', 'ii', 'iii', 'image', 'import',
+    'important', 'in', 'inches', 'ind', 'index', 'info', 'init', 'instagram', 'install', 'integer', 'intel', 'internet', 'into', 'ios', 'ip', 'is', 'iv', 'ix',
     'it', 'item', 'items', 'its', 'itself', 'java', 'javascript', 'json', 'just', 'justify', 'keep', 'kept', 'key', 'keys', 'kind',
     'knew', 'know', 'known', 'kotlin', 'land', 'large', 'last', 'late', 'later', 'laugh', 'lay', 'layout', 'lead', 'learn', 'least',
     'leave', 'left', 'length', 'less', 'let', 'letter', 'library', 'life', 'light', 'like', 'line', 'linux', 'list', 'listen', 'lists',
@@ -37,7 +37,7 @@ class AutocorrectEngine {
     'method', 'microsoft', 'might', 'mind', 'miss', 'model', 'module', 'more', 'morning', 'most', 'mother', 'mountain', 'move', 'much', 'multi',
     'must', 'my', 'myself', 'name', 'near', 'need', 'network', 'never', 'new', 'next', 'night', 'no', 'north', 'not', 'note',
     'nothing', 'notice', 'now', 'number', 'object', 'objectivec', 'of', 'off', 'often', 'oh', 'ok', 'okay', 'old', 'on', 'once',
-    'one', 'only', 'open', 'option', 'options', 'or', 'order', 'other', 'our', 'out', 'outside', 'over', 'own', 'page', 'paper',
+    'one', 'only', 'open', 'option', 'options', 'or', 'order', 'os', 'other', 'our', 'out', 'outside', 'over', 'own', 'page', 'paper',
     'parent', 'part', 'party', 'pass', 'password', 'past', 'path', 'pattern', 'pause', 'people', 'perhaps', 'person', 'picture',
     'place', 'plan', 'play', 'please', 'point', 'port', 'pose', 'position', 'possible', 'power', 'present', 'press', 'prev', 'private', 'problem',
     'process', 'prod', 'product', 'production', 'profile', 'program', 'project', 'provide', 'public', 'publish', 'pull', 'put', 'python', 'query', 'question',
@@ -48,7 +48,7 @@ class AutocorrectEngine {
     'setup', 'several', 'shall', 'shape', 'she', 'shell', 'shift', 'ship', 'short', 'should', 'show', 'shown', 'shut', 'sibling', 'side',
     'sight', 'sign', 'silent', 'simple', 'since', 'sing', 'single', 'sir', 'sister', 'sit', 'site', 'six', 'size', 'skin', 'sky',
     'sleep', 'slip', 'slow', 'small', 'smell', 'smile', 'snow', 'so', 'software', 'some', 'someone', 'something', 'sometime', 'somewhere', 'song',
-    'soon', 'sorry', 'sort', 'sound', 'south', 'space', 'speak', 'special', 'spell', 'spend', 'spoke', 'spot', 'spread', 'spring', 'stack',
+    'soon', 'sorry', 'sort', 'sound', 'south', 'space', 'speak', 'special', 'spell', 'spend', 'spoke', 'spot', 'spread', 'spring', 'sql', 'stack',
     'staging', 'start', 'static', 'status', 'stop', 'stretch', 'string', 'strong', 'student', 'study', 'subject', 'submit', 'substance',
     'success', 'such', 'sudden', 'suffice', 'sugar', 'suit', 'summer', 'sun', 'supply', 'support', 'sure', 'surface', 'surprise',
     'sweet', 'swift', 'swim', 'system', 'table', 'tail', 'take', 'taken', 'talk', 'tall', 'tape', 'task', 'taste', 'teach',
@@ -58,8 +58,8 @@ class AutocorrectEngine {
     'tiny', 'tinymind', 'tire', 'to', 'today', 'together', 'told', 'tomorrow', 'too', 'took', 'top', 'total', 'touch',
     'toward', 'town', 'toy', 'trace', 'track', 'trade', 'train', 'travel', 'tree', 'trial', 'triangle', 'trip', 'trouble',
     'true', 'trunk', 'try', 'tube', 'turn', 'twenty', 'two', 'type', 'typescript', 'under', 'understand', 'unit',
-    'until', 'up', 'update', 'upon', 'uri', 'url', 'us', 'use', 'user', 'usual', 'validate', 'valley',
-    'value', 'values', 'various', 'verb', 'very', 'view', 'visit', 'voice', 'vowel', 'wagon', 'wait',
+    'ui', 'until', 'up', 'update', 'upon', 'uri', 'url', 'us', 'use', 'user', 'usual', 'ux', 'v', 'validate', 'valley',
+    'value', 'values', 'various', 'verb', 'very', 'view', 'vi', 'vii', 'viii', 'visit', 'voice', 'vowel', 'wagon', 'wait',
     'walk', 'wall', 'want', 'war', 'warm', 'warn', 'warning', 'was', 'wash', 'watch', 'water',
     'wave', 'way', 'we', 'weak', 'wear', 'weather', 'week', 'weight', 'well', 'went', 'were',
     'west', 'wfh', 'what', 'wheel', 'when', 'where', 'whether', 'which', 'while', 'white',
@@ -67,7 +67,7 @@ class AutocorrectEngine {
     'wild', 'will', 'win', 'wind', 'window', 'windows', 'wing', 'winter', 'wire', 'wise',
     'wish', 'with', 'within', 'without', 'woman', 'wonder', 'wood', 'word', 'work',
     'worker', 'world', 'worry', 'worse', 'worth', 'would', 'wrap', 'write', 'written',
-    'wrong', 'wrote', 'xml', 'yaml', 'yard', 'year', 'yellow', 'yes', 'yesterday',
+    'wrong', 'wrote', 'x', 'xml', 'yaml', 'yard', 'year', 'yellow', 'yes', 'yesterday',
     'yet', 'you', 'young', 'your', 'yours', 'yourself', 'yourselves', 'youth', 'youtube',
     'zero', 'zone',
   };
@@ -171,9 +171,11 @@ class AutocorrectEngine {
     for (var mapper in _mappers) {
       final enConverted = mapper.convertFromTarget(word);
       if (enConverted != word) {
+        if (_isThaiBypassWord(word)) {
+          continue;
+        }
         if (_commonEnWords.contains(enConverted.toLowerCase()) || 
-            userEnWords.contains(enConverted.toLowerCase()) || 
-            _isValidEnglishAbbreviation(enConverted)) {
+            userEnWords.contains(enConverted.toLowerCase())) {
           return CorrectionResult(
             correctedWord: enConverted,
             languageCode: mapper.languageCode,
@@ -228,6 +230,9 @@ class AutocorrectEngine {
     for (var mapper in _mappers) {
       final enConverted = mapper.convertFromTarget(word);
       if (enConverted != word) {
+        if (_isThaiBypassWord(word)) {
+          continue;
+        }
         if (_commonEnWords.contains(enConverted.toLowerCase()) || userEnWords.contains(enConverted.toLowerCase())) {
           return CorrectionResult(
             correctedWord: enConverted,
@@ -265,12 +270,10 @@ class AutocorrectEngine {
     return null;
   }
 
-  static bool _isValidEnglishAbbreviation(String text) {
-    if (text.isEmpty) return false;
-    if (text.length >= 2 && text.length <= 4) {
-      return RegExp(r'^[a-zA-Z]+$').hasMatch(text);
-    }
-    return false;
+  static bool _isThaiBypassWord(String word) {
+    final lower = word.toLowerCase();
+    const bypassWords = {'รร', 'รอ', 'อร', 'รด', 'รก', 'ทำ', 'นา', 'นพ', 'เป', 'ระ'};
+    return bypassWords.contains(lower);
   }
 
   // ฟังก์ชันวิเคราะห์ประโยคและบริบทโดยใช้ Local llama.cpp (Embedded AI)
