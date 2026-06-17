@@ -97,7 +97,17 @@ class AutocorrectEngine {
       if (Platform.isWindows) {
         Llama.libraryPath = "llama_cpp_dart_plugin.dll";
       } else if (Platform.isMacOS) {
-        Llama.libraryPath = "/Users/q0022/.pub-cache/hosted/pub.dev/llama_cpp_dart-0.2.2/dist/Llama.xcframework/macos-arm64/Llama.framework/Llama";
+        // ค้นหาตำแหน่ง Llama library ภายใน app bundle's Frameworks ก่อน (โหมดใช้งานจริงที่ผ่านการลงลายเซ็น)
+        final executableDir = File(Platform.resolvedExecutable).parent.path;
+        final localFrameworkPath = "$executableDir/../Frameworks/Llama.framework/Llama";
+        if (File(localFrameworkPath).existsSync()) {
+          Llama.libraryPath = localFrameworkPath;
+          AppLogger.log("TinyMind: Using local bundle Llama library at $localFrameworkPath");
+        } else {
+          // ใช้ไฟล์จาก pub cache สำหรับกรณีรัน debug ในโหมดพัฒนา
+          Llama.libraryPath = "/Users/q0022/.pub-cache/hosted/pub.dev/llama_cpp_dart-0.2.2/dist/Llama.xcframework/macos-arm64/Llama.framework/Llama";
+          AppLogger.log("TinyMind: Falling back to pub cache Llama library");
+        }
       }
 
       AppLogger.log("TinyMind: Loading local GGUF model: $modelPath");

@@ -27,6 +27,7 @@
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
+		34ED2D9264A9484E2CD750EE /* LaunchAtLogin in Frameworks */ = {isa = PBXBuildFile; productRef = 61E212D9543DEDF59F6211DB /* LaunchAtLogin */; };
 		40CECAC534D2A220364E5CFD /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB0151E0925E3DD087619F7A /* Pods_Runner.framework */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		EE7EFE8E0D1131D480D6A03E /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2B71DC0493590FC94B11EA18 /* Pods_RunnerTests.framework */; };
@@ -107,6 +108,7 @@
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
 				40CECAC534D2A220364E5CFD /* Pods_Runner.framework in Frameworks */,
+				34ED2D9264A9484E2CD750EE /* LaunchAtLogin in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -254,6 +256,7 @@
 			name = Runner;
 			packageProductDependencies = (
 				78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */,
+				61E212D9543DEDF59F6211DB /* LaunchAtLogin */,
 			);
 			productName = Runner;
 			productReference = 33CC10ED2044A3C60003C045 /* tinymind.app */;
@@ -300,6 +303,7 @@
 			);
 			mainGroup = 33CC10E42044A3C60003C045;
 			packageReferences = (
+				1B837E90DD458C58AF0BD057 /* XCRemoteSwiftPackageReference "LaunchAtLogin" */,
 				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */,
 			);
 			productRefGroup = 33CC10EE2044A3C60003C045 /* Products */;
@@ -814,7 +818,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		1B837E90DD458C58AF0BD057 /* XCRemoteSwiftPackageReference "LaunchAtLogin" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/LaunchAtLogin";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		61E212D9543DEDF59F6211DB /* LaunchAtLogin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1B837E90DD458C58AF0BD057 /* XCRemoteSwiftPackageReference "LaunchAtLogin" */;
+			productName = LaunchAtLogin;
+		};
 		78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FlutterGeneratedPluginSwiftPackage;

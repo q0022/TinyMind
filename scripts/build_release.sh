@@ -15,6 +15,9 @@ set -euo pipefail
 
 # 1️⃣ Build the app
 echo "🔧 Building TinyMind macOS app (release)..."
+# ลบ Llama.framework ของเก่าออกก่อน (ป้องกันปัญหา shallow bundle validation ของ Xcode)
+rm -rf "build/macos/Build/Products/Release/TinyMind.app/Contents/Frameworks/Llama.framework"
+rm -rf "build/macos/Build/Products/Release/tinymind.app/Contents/Frameworks/Llama.framework"
 flutter build macos --release
 
 # Define paths
@@ -22,10 +25,72 @@ APP_PATH="build/macos/Build/Products/Release/TinyMind.app"
 ZIP_NAME="TinyMind-macOS.zip"
 DMG_NAME="TinyMind-macOS.dmg"
 
+# เปลี่ยนชื่อจาก tinymind.app เป็น TinyMind.app ให้ถูกต้องตามเคสตัวพิมพ์ใหญ่-เล็กของระบบ macOS
+if [ -d "build/macos/Build/Products/Release/tinymind.app" ]; then
+  echo "🔄 Renaming tinymind.app to TinyMind.app..."
+  mv "build/macos/Build/Products/Release/tinymind.app" "build/macos/Build/Products/Release/TinyMind_temp.app"
+  mv "build/macos/Build/Products/Release/TinyMind_temp.app" "$APP_PATH"
+fi
+
 if [ ! -d "$APP_PATH" ]; then
   echo "❌ Error: .app bundle not found at $APP_PATH"
   exit 1
 fi
+
+# 1.5 Copy Llama.framework from pub cache to the app bundle Frameworks folder
+echo "📦 Copying Llama.framework from pub cache to app bundle..."
+mkdir -p "$APP_PATH/Contents/Frameworks"
+rm -rf "$APP_PATH/Contents/Frameworks/Llama.framework"
+cp -R "$HOME/.pub-cache/hosted/pub.dev/llama_cpp_dart-0.2.2/dist/Llama.xcframework/macos-arm64/Llama.framework" "$APP_PATH/Contents/Frameworks/"
+
+# 1.6 Unpack, codesign and repack LaunchAtLogin helper zip files in resources
+echo "🛡️ Unpacking, codesigning, and repacking LaunchAtLogin helper zip files..."
+BUNDLE_RESOURCES="$(pwd)/$APP_PATH/Contents/Resources/LaunchAtLogin_LaunchAtLogin.bundle/Contents/Resources"
+
+if [ -d "$BUNDLE_RESOURCES" ]; then
+  TEMP_DIR=$(mktemp -d)
+  
+  # 1. Process LaunchAtLoginHelper.zip
+  if [ -f "$BUNDLE_RESOURCES/LaunchAtLoginHelper.zip" ]; then
+    echo "  Processing LaunchAtLoginHelper.zip..."
+    unzip -q "$BUNDLE_RESOURCES/LaunchAtLoginHelper.zip" -d "$TEMP_DIR/no-runtime"
+    
+    # Sign nested binary
+    codesign --force --options runtime --timestamp --sign "Developer ID Application: CSN ADVANCE COMPANY LIMITED (8DY6N2T2V8)" "$TEMP_DIR/no-runtime/LaunchAtLoginHelper.app/Contents/MacOS/LaunchAtLoginHelper"
+    # Sign app bundle
+    codesign --force --options runtime --timestamp --sign "Developer ID Application: CSN ADVANCE COMPANY LIMITED (8DY6N2T2V8)" "$TEMP_DIR/no-runtime/LaunchAtLoginHelper.app"
+    
+    # Pack it back
+    rm -f "$BUNDLE_RESOURCES/LaunchAtLoginHelper.zip"
+    (cd "$TEMP_DIR/no-runtime" && zip -r -q "$BUNDLE_RESOURCES/LaunchAtLoginHelper.zip" LaunchAtLoginHelper.app)
+  fi
+
+  # 2. Process LaunchAtLoginHelper-with-runtime.zip
+  if [ -f "$BUNDLE_RESOURCES/LaunchAtLoginHelper-with-runtime.zip" ]; then
+    echo "  Processing LaunchAtLoginHelper-with-runtime.zip..."
+    unzip -q "$BUNDLE_RESOURCES/LaunchAtLoginHelper-with-runtime.zip" -d "$TEMP_DIR/with-runtime"
+    
+    # Sign nested dylibs (bottom-up)
+    find "$TEMP_DIR/with-runtime/LaunchAtLoginHelper.app/Contents/Frameworks" -type f -name "*.dylib" | while read -r dylib; do
+      echo "    Signing helper dylib: $(basename "$dylib")"
+      codesign --force --options runtime --timestamp --sign "Developer ID Application: CSN ADVANCE COMPANY LIMITED (8DY6N2T2V8)" "$dylib"
+    done
+    
+    # Sign nested binary
+    codesign --force --options runtime --timestamp --sign "Developer ID Application: CSN ADVANCE COMPANY LIMITED (8DY6N2T2V8)" "$TEMP_DIR/with-runtime/LaunchAtLoginHelper.app/Contents/MacOS/LaunchAtLoginHelper"
+    
+    # Sign app bundle
+    codesign --force --options runtime --timestamp --sign "Developer ID Application: CSN ADVANCE COMPANY LIMITED (8DY6N2T2V8)" "$TEMP_DIR/with-runtime/LaunchAtLoginHelper.app"
+    
+    # Pack it back
+    rm -f "$BUNDLE_RESOURCES/LaunchAtLoginHelper-with-runtime.zip"
+    (cd "$TEMP_DIR/with-runtime" && zip -r -q "$BUNDLE_RESOURCES/LaunchAtLoginHelper-with-runtime.zip" LaunchAtLoginHelper.app)
+  fi
+  
+  # Clean up temp dir
+  rm -rf "$TEMP_DIR"
+fi
+
 
 # 2️⃣ Codesign all sub-components with Hardened Runtime (bottom-up order)
 echo "🛡️ Codesigning nested Mach-O binaries..."
