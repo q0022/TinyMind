@@ -807,8 +807,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
     // 1. ถ้าพิมพ์ space, enter หรือ tab ถือว่าจบบทคำปัจจุบัน
     if (char == ' ' || char == '\n' || char == '\r' || char == '\t') {
-      if (char == '\n' || char == '\r') {
-        // หากกด Enter/Return ให้เคลียร์บัฟเฟอร์ทันทีและไม่ทำการแก้ไข เพื่อป้องกัน Race Condition ในแอปแชท
+      if (char == '\n' || char == '\r' || char == '\t') {
+        // หากกด Enter/Return หรือ Tab ให้เคลียร์บัฟเฟอร์ทันทีและไม่ทำการแก้ไข เพื่อป้องกันปัญหา Autocomplete ใน Terminal/Editor
         _clearBuffers();
         return;
       }

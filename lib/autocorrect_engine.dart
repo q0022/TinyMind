@@ -166,6 +166,11 @@ class AutocorrectEngine {
       return null;
     }
 
+    // ป้องกันการแปลงหากคำเป็นโค้ด พาธ อีเมล หรือสัญลักษณ์ระบบ
+    if (_isCodeOrSymbol(word)) {
+      return null;
+    }
+
     // 1. ตรวจสอบกรณีพิมพ์ไทยผสมอังกฤษ (สลับเลย์เอาต์กลางคำ) หรือลืมเปลี่ยนภาษาแบบผสม
     // ลองแปลงเป็นภาษาอังกฤษดู
     for (var mapper in _mappers) {
@@ -226,6 +231,11 @@ class AutocorrectEngine {
       return null;
     }
 
+    // ป้องกันการแปลงหากคำเป็นโค้ด พาธ อีเมล หรือสัญลักษณ์ระบบ
+    if (_isCodeOrSymbol(word)) {
+      return null;
+    }
+
     // 1. ลองแปลงเป็นภาษาอังกฤษก่อน
     for (var mapper in _mappers) {
       final enConverted = mapper.convertFromTarget(word);
@@ -274,6 +284,54 @@ class AutocorrectEngine {
     final lower = word.toLowerCase();
     const bypassWords = {'รร', 'รอ', 'อร', 'รด', 'รก', 'ทำ', 'นา', 'นพ', 'เป', 'ระ'};
     return bypassWords.contains(lower);
+  }
+
+  static bool _isCodeOrSymbol(String word) {
+    if (word.isEmpty) return false;
+
+    // 1. ถ้ามีสัญลักษณ์โปรแกรมมิ่ง/ระบบ/พาธ/ลิงก์ (ยกเว้น . , - และเครื่องหมายวรรคตอนทั่วไป)
+    // สัญลักษณ์ที่จะข้าม: / \ @ ~ _ = + * ^ % $ # & | < > [ ] { } `
+    final codeSymbolRegExp = RegExp(r'[/\@~_=\+\*\^%\$#&|<>\\[\]{}`]');
+    if (codeSymbolRegExp.hasMatch(word)) {
+      return true;
+    }
+
+    // 2. ถ้าขึ้นต้นหรือลงท้ายด้วยเครื่องหมายคำพูด (เช่น "hello", 'world')
+    if ((word.startsWith('"') && word.endsWith('"')) ||
+        (word.startsWith("'") && word.endsWith("'"))) {
+      return true;
+    }
+
+    // 3. ถ้าขึ้นต้นด้วยเครื่องหมายลบ (เช่น -i, --help, -rf)
+    if (word.startsWith('-')) {
+      return true;
+    }
+
+    // 4. ถ้ามีจุด (.) และตามด้วยนามสกุลไฟล์หรือ TLD (เช่น index.js, google.com, main.dart)
+    if (word.contains('.')) {
+      final parts = word.split('.');
+      if (parts.length >= 2) {
+        final lastPart = parts.last.toLowerCase();
+        const commonExtensions = {
+          'com', 'net', 'org', 'io', 'co', 'th', 'edu', 'gov', 'mil',
+          'js', 'ts', 'py', 'dart', 'swift', 'java', 'cpp', 'h', 'c',
+          'html', 'css', 'json', 'yaml', 'yml', 'md', 'sh', 'bat', 'exe',
+          'dll', 'so', 'dylib', 'bin', 'txt', 'pdf', 'png', 'jpg', 'jpeg',
+          'gif', 'svg', 'zip', 'tar', 'gz', 'dmg', 'app', 'config', 'log'
+        };
+        if (commonExtensions.contains(lastPart)) {
+          return true;
+        }
+      }
+    }
+
+    // 5. ถ้ามีจุด (.) หรือเครื่องหมายขีด (-) อยู่กึ่งกลางคำ (ขนาบข้างด้วยตัวอักษร/ตัวเลข)
+    // เช่น index.js, google.com, sisa-ai, my-key, svn.s
+    if (RegExp(r'[a-zA-Z\d]+[\.-][a-zA-Z\d]+').hasMatch(word)) {
+      return true;
+    }
+
+    return false;
   }
 
   // ฟังก์ชันวิเคราะห์ประโยคและบริบทโดยใช้ Local llama.cpp (Embedded AI)
