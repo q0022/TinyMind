@@ -350,41 +350,28 @@ class AutocorrectEngine {
   static bool _isCodeOrSymbol(String word) {
     if (word.isEmpty) return false;
 
+    bool matchesBypass = false;
+
     // 1. ถ้ามีสัญลักษณ์โปรแกรมมิ่ง/ระบบ/พาธ/ลิงก์ (ยกเว้น . , - และเครื่องหมายวรรคตอนทั่วไป)
     // สัญลักษณ์ที่จะข้าม: / \ @ ~ _ = + * ^ % $ # & | < > [ ] { } `
     final codeSymbolRegExp = RegExp(r'[/\@~_=\+\*\^%\$#&|<>\\[\]{}`]');
     if (codeSymbolRegExp.hasMatch(word)) {
-      // ตรวจสอบเป็นพิเศษ: ถ้าคำนี้แปลงเป็นภาษาไทยแล้วเป็นคำที่ถูกต้องหรือมีแพทเทิร์นไทยที่ถูกต้อง
-      // เราจะไม่ถือว่าเป็น Code/Symbol เพื่อให้สามารถสลับภาษาคำที่ประกอบด้วยตัวอักษร บ, ล, ฝ, ช, ู ฯลฯ ได้
-      bool isThaiWord = false;
-      for (var mapper in _mappers) {
-        final thConverted = mapper.convertToTarget(word);
-        if (thConverted != word) {
-          final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
-          if (mapper.isCommonWord(thFixed) || mapper.isValidPatternStrict(thFixed, word)) {
-            isThaiWord = true;
-            break;
-          }
-        }
-      }
-      if (!isThaiWord) {
-        return true;
-      }
+      matchesBypass = true;
     }
 
     // 2. ถ้าขึ้นต้นหรือลงท้ายด้วยเครื่องหมายคำพูด (เช่น "hello", 'world')
-    if ((word.startsWith('"') && word.endsWith('"')) ||
-        (word.startsWith("'") && word.endsWith("'"))) {
-      return true;
+    if (!matchesBypass && ((word.startsWith('"') && word.endsWith('"')) ||
+        (word.startsWith("'") && word.endsWith("'")))) {
+      matchesBypass = true;
     }
 
     // 3. ถ้าขึ้นต้นด้วยเครื่องหมายลบ (เช่น -i, --help, -rf)
-    if (word.startsWith('-')) {
-      return true;
+    if (!matchesBypass && word.startsWith('-')) {
+      matchesBypass = true;
     }
 
     // 4. ถ้ามีจุด (.) และตามด้วยนามสกุลไฟล์หรือ TLD (เช่น index.js, google.com, main.dart)
-    if (word.contains('.')) {
+    if (!matchesBypass && word.contains('.')) {
       final parts = word.split('.');
       if (parts.length >= 2) {
         final lastPart = parts.last.toLowerCase();
@@ -396,15 +383,41 @@ class AutocorrectEngine {
           'gif', 'svg', 'zip', 'tar', 'gz', 'dmg', 'app', 'config', 'log'
         };
         if (commonExtensions.contains(lastPart)) {
-          return true;
+          matchesBypass = true;
         }
       }
     }
 
     // 5. ถ้ามีจุด (.) หรือเครื่องหมายขีด (-) อยู่กึ่งกลางคำ (ขนาบข้างด้วยตัวอักษร/ตัวเลข)
     // เช่น index.js, google.com, sisa-ai, my-key, svn.s
-    if (RegExp(r'[a-zA-Z\d]+[\.-][a-zA-Z\d]+').hasMatch(word)) {
-      return true;
+    if (!matchesBypass && RegExp(r'[a-zA-Z\d]+[\.-][a-zA-Z\d]+').hasMatch(word)) {
+      matchesBypass = true;
+    }
+
+    // ถ้าตรวจพบว่าตรงกับเงื่อนไขการ Bypass โค้ด/สัญลักษณ์
+    // ให้ตรวจสอบก่อนว่าคำนั้นเป็นคำในภาษาไทยที่ถูกต้องหรือไม่ (เพื่อกันการบล็อกปุ่ม บ, ล, ฝ, ช, ู, ข, ใ ฯลฯ)
+    if (matchesBypass) {
+      bool isThaiWord = false;
+      for (var mapper in _mappers) {
+        final thConverted = mapper.convertToTarget(word);
+        if (thConverted != word) {
+          final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
+          if (mapper.isCommonWord(thFixed) || mapper.isValidPatternStrict(thFixed, word)) {
+            // ดักจับพิเศษ: หากคำดั้งเดิมเริ่มต้นด้วยเครื่องหมายลบ (เช่น -rf, -la)
+            // แต่ไม่มีสระหรือวรรณยุกต์ไทยเลย และไม่ใช่คำไทยยอดนิยม เราจะไม่นับเป็นคำไทย (เพื่อป้องกันการสลับคำสั่ง option ใน command line)
+            if (word.startsWith('-') && 
+                !RegExp(r'[เแโใไิีึืั็ํุูะาำ่้๊๋์]').hasMatch(thFixed) && 
+                !mapper.isCommonWord(thFixed)) {
+              continue;
+            }
+            isThaiWord = true;
+            break;
+          }
+        }
+      }
+      if (!isThaiWord) {
+        return true;
+      }
     }
 
     return false;
