@@ -152,6 +152,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
+  bool _isCheckingForUpdates = false;
+  String? _updateCheckMessage;
 
   // ตัวแปรควบคุมธีมและการแสดงผล
   bool _isDarkMode = true;
@@ -316,6 +318,61 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       }
     } catch (e) {
       AppLogger.log("TinyMind Update: Failed to check for updates: $e");
+    }
+  }
+
+  Future<void> _manualCheckForUpdates() async {
+    setState(() {
+      _isCheckingForUpdates = true;
+      _updateCheckMessage = AppTranslations.translate('checking_updates_status', _displayLanguage);
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.github.com/repos/q0022/TinyMind/releases/latest'),
+        headers: {'User-Agent': 'TinyMind-App'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final String tag = data['tag_name'] ?? '';
+        final String url = data['html_url'] ?? '';
+
+        if (_isNewerVersion(currentVersion, tag)) {
+          setState(() {
+            _isUpdateAvailable = true;
+            _latestVersion = tag.replaceAll('v', '').trim();
+            _latestReleaseUrl = url;
+            _updateCheckMessage = "${AppTranslations.translate('update_available', _displayLanguage)} (v$_latestVersion)";
+          });
+          
+          if (Platform.isMacOS || Platform.isWindows) {
+            try {
+              await autoUpdater.checkForUpdates();
+            } catch (e) {
+              AppLogger.log("Failed to launch Sparkle update dialog: $e");
+            }
+          }
+        } else {
+          setState(() {
+            _isUpdateAvailable = false;
+            _updateCheckMessage = AppTranslations.translate('no_updates_status', _displayLanguage);
+          });
+        }
+      } else {
+        setState(() {
+          _updateCheckMessage = "Error: HTTP ${response.statusCode}";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _updateCheckMessage = "Error: $e";
+      });
+      AppLogger.log("TinyMind Update: Manual update check failed: $e");
+    } finally {
+      setState(() {
+        _isCheckingForUpdates = false;
+      });
     }
   }
 

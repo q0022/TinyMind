@@ -85,6 +85,12 @@ class AppTranslations {
       // App Updates
       'update_available': 'มีอัปเดตเวอร์ชันใหม่!',
       'update_download_btn': 'ดาวน์โหลดตัวอัปเดต',
+      'updates_section': 'การอัปเดตระบบ',
+      'current_version_label': 'เวอร์ชันปัจจุบัน:',
+      'check_updates_desc': 'ตรวจสอบและติดตั้งแอป TinyMind เวอร์ชันล่าสุดโดยอัตโนมัติ',
+      'check_updates_btn': 'ตรวจสอบเวอร์ชันใหม่',
+      'checking_updates_status': 'กำลังตรวจสอบ...',
+      'no_updates_status': 'แอปเป็นเวอร์ชันล่าสุดแล้ว',
 
       // Diagnostics
       'diagnostics_section': 'การวินิจฉัยและบันทึกประวัติ',
@@ -183,6 +189,12 @@ class AppTranslations {
       // App Updates
       'update_available': 'New version available!',
       'update_download_btn': 'Download update',
+      'updates_section': 'System Updates',
+      'current_version_label': 'Current Version:',
+      'check_updates_desc': 'Check for and install the latest version of TinyMind automatically',
+      'check_updates_btn': 'Check for Updates',
+      'checking_updates_status': 'Checking...',
+      'no_updates_status': 'App is up to date',
 
       // Diagnostics
       'diagnostics_section': 'Diagnostics & Logs',

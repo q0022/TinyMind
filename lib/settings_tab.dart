@@ -533,6 +533,89 @@ class SettingsTab extends StatelessWidget {
           
           const SizedBox(height: 20),
 
+          _buildSettingsBlock(AppTranslations.translate('updates_section', state._displayLanguage), [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        AppTranslations.translate('current_version_label', state._displayLanguage),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: state._textColorPrimary),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          "v${_MainDashboardState.currentVersion}",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    AppTranslations.translate('check_updates_desc', state._displayLanguage),
+                    style: TextStyle(fontSize: 11, color: state._textColorSecondary),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: state._isCheckingForUpdates ? null : state._manualCheckForUpdates,
+                        icon: state._isCheckingForUpdates 
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.refresh_rounded, size: 16),
+                        label: Text(
+                          state._isCheckingForUpdates 
+                              ? AppTranslations.translate('checking_updates_status', state._displayLanguage)
+                              : AppTranslations.translate('check_updates_btn', state._displayLanguage),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                      if (state._updateCheckMessage != null) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            state._updateCheckMessage!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: state._isUpdateAvailable ? Colors.green : state._textColorSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ]),
+
+          const SizedBox(height: 20),
+
           _buildSettingsBlock(AppTranslations.translate('diagnostics_section', state._displayLanguage), [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
