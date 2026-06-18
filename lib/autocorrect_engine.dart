@@ -13,53 +13,52 @@ class AutocorrectEngine {
   static const Set<String> _commonEnWords = {
     'a', 'about', 'above', 'add', 'admin', 'after', 'again', 'against', 'ai', 'align', 'all', 'almost', 'along', 'already', 'also',
     'although', 'always', 'am', 'amd', 'among', 'an', 'ancestor', 'and', 'android', 'another', 'any', 'anyone', 'anything', 'anywhere', 'api',
-    'app', 'apple', 'application', 'are', 'area', 'around', 'as', 'ask', 'asset', 'assets', 'at', 'audio', 'away', 'back', 'backspace',
-    'base', 'bash', 'be', 'because', 'become', 'before', 'began', 'begin', 'behind', 'being', 'below', 'between', 'both',
+    'app', 'apple', 'application', 'apr', 'april', 'are', 'area', 'around', 'art', 'as', 'ask', 'asset', 'assets', 'at', 'audio', 'aug', 'august', 'away', 'back', 'backspace', 'bad', 'bar', 'base', 'bash', 'be', 'because', 'become', 'bed', 'before', 'began', 'begin', 'behind', 'being', 'below', 'between', 'bin', 'blog', 'both', 'book', 'boy', 'buy',
     'bring', 'brought', 'build', 'built', 'busy', 'but', 'button', 'by', 'call', 'called', 'came', 'can', 'cancel', 'cannot', 'capslock',
-    'card', 'cards', 'case', 'cause', 'center', 'certain', 'change', 'chat', 'check', 'child', 'children', 'class', 'clear', 'client', 'close',
-    'code', 'color', 'column', 'come', 'compile', 'config', 'configuration', 'console', 'const', 'could', 'count', 'course', 'cpp', 'create', 'csharp',
-    'css', 'cut', 'dart', 'data', 'database', 'day', 'db', 'debug', 'deepmind', 'delete', 'deploy', 'descendant', 'design', 'detail', 'details', 'dev',
+    'card', 'cards', 'car', 'cat', 'case', 'cause', 'center', 'certain', 'change', 'chat', 'check', 'child', 'children', 'class', 'clear', 'client', 'cli', 'cmd', 'col', 'choe', 'close',
+    'code', 'color', 'column', 'come', 'cool', 'cute', 'compile', 'config', 'configuration', 'console', 'const', 'could', 'count', 'cpu', 'course', 'cpp', 'cron', 'csv', 'create', 'csharp',
+    'css', 'cut', 'dart', 'data', 'database', 'day', 'db', 'debug', 'dec', 'december', 'deepmind', 'delete', 'deploy', 'descendant', 'design', 'detail', 'details', 'dev', 'div', 'dns', 'doc', 'dock', 'dog', 'dom', 'door',
     'developer', 'development', 'device', 'did', 'differ', 'different', 'directory', 'do', 'does', 'done', 'double', 'down', 'draw', 'during', 'each',
-    'early', 'earth', 'ease', 'east', 'easy', 'eat', 'either', 'else', 'end', 'enough', 'env', 'environment', 'error', 'even', 'evenly',
-    'ever', 'every', 'everyone', 'everything', 'example', 'export', 'face', 'facebook', 'fact', 'failure', 'fall', 'far', 'fast', 'feel', 'few',
-    'field', 'file', 'filter', 'final', 'find', 'first', 'five', 'flex', 'flutter', 'fly', 'folder', 'follow', 'font', 'food', 'for',
-    'force', 'form', 'forward', 'found', 'four', 'framework', 'friend', 'from', 'front', 'full', 'function', 'game', 'gave', 'get', 'git',
-    'github', 'gitlab', 'give', 'given', 'go', 'golang', 'gold', 'good', 'google', 'got', 'graphql', 'great', 'green', 'grid', 'ground',
-    'group', 'grow', 'grpc', 'guest', 'had', 'half', 'hand', 'happen', 'hard', 'has', 'have', 'he', 'head', 'hear', 'heard',
+    'ear', 'early', 'earth', 'ease', 'east', 'easy', 'eat', 'either', 'else', 'end', 'enough', 'env', 'environment', 'error', 'etc', 'even', 'evenly',
+    'ever', 'every', 'everyone', 'everything', 'eye', 'example', 'export', 'face', 'facebook', 'fact', 'failure', 'fall', 'far', 'fast', 'feb', 'february', 'feel', 'few', 'feed',
+    'field', 'file', 'filter', 'final', 'find', 'fine', 'fire', 'fish', 'first', 'five', 'flat', 'flex', 'flutter', 'fly', 'folder', 'follow', 'font', 'food', 'foot', 'for', 'ftp', 'free',
+    'force', 'form', 'forward', 'found', 'four', 'framework', 'friend', 'from', 'front', 'full', 'function', 'game', 'gave', 'gate', 'get', 'git', 'gif',
+    'github', 'gitlab', 'give', 'given', 'girl', 'glad', 'go', 'goal', 'god', 'golang', 'gold', 'good', 'google', 'got', 'gpu', 'graphql', 'great', 'green', 'grid', 'ground',
+    'group', 'grow', 'grpc', 'guest', 'had', 'half', 'hand', 'happen', 'hard', 'has', 'have', 'he', 'head', 'hear', 'heard', 'hair',
     'height', 'held', 'hello', 'help', 'her', 'here', 'high', 'him', 'himself', 'his', 'hold', 'home', 'hot',
-    'hour', 'house', 'how', 'however', 'html', 'http', 'https', 'hundred', 'i', 'icon', 'id', 'idea', 'if', 'ig', 'ii', 'iii', 'image', 'import',
-    'important', 'in', 'inches', 'ind', 'index', 'info', 'init', 'instagram', 'install', 'integer', 'intel', 'internet', 'into', 'ios', 'ip', 'is', 'iv', 'ix',
-    'it', 'item', 'items', 'its', 'itself', 'java', 'javascript', 'json', 'just', 'justify', 'keep', 'kept', 'key', 'keys', 'kind',
+    'hour', 'house', 'how', 'however', 'html', 'http', 'https', 'href', 'hundred', 'i', 'icon', 'id', 'idea', 'if', 'ig', 'ii', 'iii', 'image', 'img', 'import',
+    'important', 'in', 'inches', 'ind', 'index', 'info', 'init', 'instagram', 'install', 'integer', 'intel', 'internet', 'into', 'ios', 'io', 'ip', 'is', 'iv', 'ix',
+    'it', 'item', 'items', 'its', 'itself', 'java', 'javascript', 'json', 'job', 'jpg', 'js', 'jan', 'january', 'jul', 'july', 'jun', 'june', 'just', 'justify', 'keep', 'kept', 'key', 'keys', 'kind',
     'knew', 'know', 'known', 'kotlin', 'land', 'large', 'last', 'late', 'later', 'laugh', 'lay', 'layout', 'lead', 'learn', 'least',
-    'leave', 'left', 'length', 'less', 'let', 'letter', 'library', 'life', 'light', 'like', 'line', 'linux', 'list', 'listen', 'lists',
-    'little', 'live', 'lived', 'load', 'loading', 'local', 'login', 'logout', 'long', 'look', 'love', 'low', 'mac', 'macos', 'made',
-    'main', 'make', 'many', 'map', 'maps', 'margin', 'mark', 'match', 'may', 'me', 'mean', 'measure', 'media', 'member', 'men',
-    'method', 'microsoft', 'might', 'mind', 'miss', 'model', 'module', 'more', 'morning', 'most', 'mother', 'mountain', 'move', 'much', 'multi',
-    'must', 'my', 'myself', 'name', 'near', 'need', 'network', 'never', 'new', 'next', 'night', 'no', 'north', 'not', 'note',
-    'nothing', 'notice', 'now', 'number', 'object', 'objectivec', 'of', 'off', 'often', 'oh', 'ok', 'okay', 'old', 'on', 'once',
-    'one', 'only', 'open', 'option', 'options', 'or', 'order', 'os', 'other', 'our', 'out', 'outside', 'over', 'own', 'page', 'paper',
+    'leave', 'left', 'length', 'less', 'let', 'letter', 'lib', 'library', 'life', 'light', 'like', 'line', 'linux', 'list', 'listen', 'lists',
+    'little', 'live', 'lived', 'load', 'loading', 'local', 'login', 'logout', 'log', 'logo', 'long', 'look', 'love', 'low', 'mac', 'macos', 'made',
+    'main', 'make', 'many', 'map', 'maps', 'mar', 'march', 'margin', 'mark', 'match', 'may', 'me', 'mean', 'measure', 'media', 'member', 'men',
+    'method', 'microsoft', 'might', 'min', 'mind', 'miss', 'model', 'module', 'more', 'morning', 'most', 'mother', 'mountain', 'move', 'ms', 'much', 'multi',
+    'must', 'my', 'myself', 'name', 'nav', 'near', 'need', 'network', 'never', 'new', 'next', 'night', 'nil', 'no', 'north', 'not', 'note',
+    'nothing', 'notice', 'nov', 'november', 'now', 'null', 'number', 'object', 'objectivec', 'oct', 'october', 'of', 'off', 'often', 'oh', 'ok', 'okay', 'old', 'on', 'once',
+    'one', 'only', 'open', 'option', 'options', 'or', 'order', 'os', 'other', 'our', 'out', 'outside', 'over', 'own', 'page', 'paper', 'pdf',
     'parent', 'part', 'party', 'pass', 'password', 'past', 'path', 'pattern', 'pause', 'people', 'perhaps', 'person', 'picture',
-    'place', 'plan', 'play', 'please', 'point', 'port', 'pose', 'position', 'possible', 'power', 'present', 'press', 'prev', 'private', 'problem',
+    'place', 'plan', 'play', 'please', 'png', 'point', 'port', 'pose', 'position', 'possible', 'post', 'power', 'present', 'press', 'prev', 'private', 'problem',
     'process', 'prod', 'product', 'production', 'profile', 'program', 'project', 'provide', 'public', 'publish', 'pull', 'put', 'python', 'query', 'question',
-    'quick', 'quite', 'rain', 'ran', 'reach', 'read', 'ready', 'real', 'receive', 'record', 'red', 'release', 'remember', 'remove', 'represent',
+    'quick', 'quite', 'rain', 'ran', 'ram', 'rom', 'reach', 'read', 'ready', 'real', 'receive', 'record', 'red', 'release', 'remember', 'remove', 'represent',
     'reset', 'resource', 'resources', 'rest', 'result', 'return', 'right', 'rise', 'road', 'rock', 'room', 'row', 'ruby', 'run', 'rust',
-    'sad', 'said', 'same', 'sand', 'sat', 'save', 'saw', 'say', 'school', 'science', 'screen', 'scroll', 'sdk', 'sea', 'search',
-    'second', 'see', 'seem', 'seen', 'self', 'send', 'sent', 'sentence', 'serve', 'server', 'service', 'set', 'sets', 'setting', 'settings',
-    'setup', 'several', 'shall', 'shape', 'she', 'shell', 'shift', 'ship', 'short', 'should', 'show', 'shown', 'shut', 'sibling', 'side',
+    'sad', 'said', 'same', 'sand', 'sat', 'save', 'saw', 'say', 'school', 'science', 'screen', 'scroll', 'sdk', 'sea', 'sec', 'search',
+    'second', 'see', 'seem', 'seen', 'self', 'send', 'sent', 'sentence', 'serve', 'server', 'service', 'sep', 'september', 'set', 'sets', 'setting', 'settings',
+    'setup', 'several', 'shall', 'shape', 'she', 'shell', 'shift', 'ship', 'shoe', 'short', 'should', 'show', 'shown', 'shut', 'sibling', 'side', 'soca', 'soda',
     'sight', 'sign', 'silent', 'simple', 'since', 'sing', 'single', 'sir', 'sister', 'sit', 'site', 'six', 'size', 'skin', 'sky',
-    'sleep', 'slip', 'slow', 'small', 'smell', 'smile', 'snow', 'so', 'software', 'some', 'someone', 'something', 'sometime', 'somewhere', 'song',
-    'soon', 'sorry', 'sort', 'sound', 'south', 'space', 'speak', 'special', 'spell', 'spend', 'spoke', 'spot', 'spread', 'spring', 'sql', 'stack',
+    'sleep', 'slip', 'slow', 'slug', 'small', 'smell', 'smile', 'snow', 'so', 'software', 'some', 'someone', 'something', 'sometime', 'somewhere', 'song',
+    'soon', 'sorry', 'sort', 'sound', 'south', 'space', 'speak', 'special', 'spell', 'spend', 'spoke', 'spot', 'spread', 'spring', 'sql', 'src', 'ssh', 'ssl', 'stack',
     'staging', 'start', 'static', 'status', 'stop', 'stretch', 'string', 'strong', 'student', 'study', 'subject', 'submit', 'substance',
     'success', 'such', 'sudden', 'suffice', 'sugar', 'suit', 'summer', 'sun', 'supply', 'support', 'sure', 'surface', 'surprise',
-    'sweet', 'swift', 'swim', 'system', 'table', 'tail', 'take', 'taken', 'talk', 'tall', 'tape', 'task', 'taste', 'teach',
-    'team', 'teeth', 'tell', 'ten', 'term', 'terminal', 'test', 'than', 'thank', 'thanks', 'that', 'the', 'their', 'them',
+    'sweet', 'swift', 'swim', 'system', 'table', 'tail', 'take', 'taken', 'talk', 'tall', 'tag', 'tap', 'tape', 'task', 'taste', 'teach',
+    'team', 'teeth', 'tell', 'ten', 'temp', 'tmp', 'term', 'terminal', 'test', 'than', 'thank', 'thanks', 'that', 'the', 'their', 'them',
     'theme', 'themselves', 'then', 'there', 'these', 'they', 'thick', 'thin', 'thing', 'think', 'third', 'this', 'those',
     'though', 'thought', 'thousand', 'three', 'threw', 'through', 'throw', 'thus', 'tie', 'tight', 'tiktok', 'time',
     'tiny', 'tinymind', 'tire', 'to', 'today', 'together', 'told', 'tomorrow', 'too', 'took', 'top', 'total', 'touch',
     'toward', 'town', 'toy', 'trace', 'track', 'trade', 'train', 'travel', 'tree', 'trial', 'triangle', 'trip', 'trouble',
     'true', 'trunk', 'try', 'tube', 'turn', 'twenty', 'two', 'type', 'typescript', 'under', 'understand', 'unit',
     'ui', 'until', 'up', 'update', 'upon', 'uri', 'url', 'us', 'use', 'user', 'usual', 'ux', 'v', 'validate', 'valley',
-    'value', 'values', 'various', 'verb', 'very', 'view', 'vi', 'vii', 'viii', 'visit', 'voice', 'vowel', 'wagon', 'wait',
+    'var', 'value', 'values', 'various', 'verb', 'very', 'view', 'void', 'vi', 'vii', 'viii', 'visit', 'voice', 'vowel', 'wagon', 'wait',
     'walk', 'wall', 'want', 'war', 'warm', 'warn', 'warning', 'was', 'wash', 'watch', 'water',
     'wave', 'way', 'we', 'weak', 'wear', 'weather', 'week', 'weight', 'well', 'went', 'were',
     'west', 'wfh', 'what', 'wheel', 'when', 'where', 'whether', 'which', 'while', 'white',
@@ -69,7 +68,7 @@ class AutocorrectEngine {
     'worker', 'world', 'worry', 'worse', 'worth', 'would', 'wrap', 'write', 'written',
     'wrong', 'wrote', 'x', 'xml', 'yaml', 'yard', 'year', 'yellow', 'yes', 'yesterday',
     'yet', 'you', 'young', 'your', 'yours', 'yourself', 'yourselves', 'youth', 'youtube',
-    'zero', 'zone',
+    'zero', 'zone', 'zsh',
   };
 
   // คลังคำศัพท์ภาษาอังกฤษเพิ่มเติมของผู้ใช้ (เรียนรู้จากการกู้คืนด้วย Hotkey)
@@ -423,8 +422,192 @@ class AutocorrectEngine {
     return false;
   }
 
-  // ฟังก์ชันวิเคราะห์ประโยคและบริบทโดยใช้ Local llama.cpp (Embedded AI)
+  // เช็คว่าคำนั้นพิมพ์ถูกต้องตามเลย์เอาต์แป้นพิมพ์ปัจจุบันอยู่แล้วหรือไม่ เพื่อหลีกเลี่ยงการเรียก AI ฟุ่มเฟือย
+  static bool isLikelyCorrectInCurrentLayout(String word) {
+    if (word.isEmpty) return true;
+
+    // 1. ถ้าคำนั้นมีภาษาไทยผสมอยู่
+    if (RegExp(r'[ก-์]').hasMatch(word)) {
+      final thMapper = _mappers.firstWhere((m) => m.languageCode == 'th');
+      return thMapper.isValidPatternStrict(word, '');
+    }
+
+    // 2. ถ้าเป็นคำภาษาอังกฤษ (ASCII เท่านั้น)
+    final lowerWord = word.toLowerCase();
+    if (_commonEnWords.contains(lowerWord) || userEnWords.contains(lowerWord)) {
+      return true;
+    }
+
+    // ตรวจสอบว่ามีสระภาษาอังกฤษอย่างน้อยหนึ่งตัวหรือไม่ (รวมตัว y)
+    final hasVowel = RegExp(r'[aeiouyAEIOUY]').hasMatch(word);
+    if (!hasVowel) return false;
+
+    // ตรวจสอบว่ามีสัญลักษณ์แป้นพิมพ์เฉพาะที่ไม่ควรมารวมอยู่ในคำภาษาอังกฤษทั่วไปหรือไม่
+    final hasInvalidEnChar = RegExp(r'[\[\];,/\\]').hasMatch(word);
+    if (hasInvalidEnChar) return false;
+
+    return true;
+  }
+
+  // ฟังก์ชันวิเคราะห์คำและบริบทแป้นพิมพ์โดยการสลับเลย์เอาต์ทางกายภาพ 100% สำหรับอังกฤษ และใช้ Local AI ซ่อมเฉพาะภาษาไทย
   static Future<String?> checkAndCorrectAI(String sentence) async {
+    try {
+      // 1. แปลง Layout ด้วยวิธี Programmatic ของเราก่อนเพื่อความแม่นยำ 100% ด้านตำแหน่งแป้น
+      final bool isThaiInput = RegExp(r'[ก-์]').hasMatch(sentence);
+      final String converted = convertLayout(
+        sentence, 
+        languageCode: 'th', 
+        toTarget: !isThaiInput,
+      );
+
+      // 2. หากคำที่ได้แปลงเป็นภาษาอังกฤษ (จากอินพุตภาษาไทย)
+      if (isThaiInput) {
+        // ตรวจสอบโครงสร้างคำภาษาอังกฤษเบื้องต้น
+        final hasVowel = RegExp(r'[aeiouyAEIOUY]').hasMatch(converted);
+        final hasInvalidEnChar = RegExp(r'[\[\];,/\\]').hasMatch(converted);
+        
+        if (hasVowel && !hasInvalidEnChar) {
+          AppLogger.log("TinyMind Engine: English layout conversion bypass AI for '$converted'.");
+          return converted;
+        }
+        
+        // หากไม่มีสระหรือมีอักขระพิเศษภาษาอังกฤษมากเกินไป ถือว่าแปลงเป็นคำอังกฤษไม่สำเร็จ
+        return null;
+      }
+
+      // 3. หากคำที่ได้แปลงเป็นภาษาไทย (จากอินพุตภาษาอังกฤษ)
+      final thMapper = _mappers.firstWhere((m) => m.languageCode == 'th');
+      if (thMapper.isValidPatternStrict(converted, '')) {
+        AppLogger.log("TinyMind Engine: Thai layout conversion bypass AI for '$converted'.");
+        return converted;
+      }
+
+      // 4. ถ้าโครงสร้างคำไทยยังก้ำกึ่ง (สะกดไม่สมบูรณ์ เช่น สคริปต) ค่อยเรียก AI ช่วยตรวจสะกดคำภาษาไทย
+      if (_llama == null) {
+        AppLogger.log("TinyMind AI: Model is not loaded yet.");
+        return null;
+      }
+
+      _llama!.clear();
+      final prompt = """<|im_start|>system
+คุณคือระบบแก้ไขคำสะกดผิดภาษาไทย (Thai Spelling Corrector)
+แก้ไขคำภาษาไทยที่พิมพ์ผิดหรือขาดตกบกพร่องให้ถูกต้อง โดยใช้คำที่พิมพ์สะกดใกล้เคียงที่สุด
+ห้ามเปลี่ยนรูปคำ ห้ามเปลี่ยนรูปไวยากรณ์ และห้ามแปลงเป็นคำความหมายอื่นเด็ดขาด
+หากคำนั้นสะกดถูกต้องดีอยู่แล้ว ให้ส่งคืนคำเดิมตรงๆ
+ผลลัพธ์จะต้องมีเฉพาะคำที่แก้ไขแล้วเท่านั้น ห้ามมีคำอธิบายอื่นใด และห้ามใส่เครื่องหมายอัญประกาศ
+
+ตัวอย่าง:
+- "สคริปต" -> "สคริปต์"
+- "สวัสดี" -> "สวัสดี"
+- "คอมพิวเตอร" -> "คอมพิวเตอร์"
+<|im_end|>
+<|im_start|>user
+แก้ไขคำนี้: "$converted"<|im_end|>
+<|im_start|>assistant
+""";
+
+      _llama!.setPrompt(prompt);
+      
+      // สั่ง Generate ข้อความแบบสมบูรณ์
+      final correctedText = await _llama!.generateCompleteText(maxTokens: 30);
+      var trimmed = correctedText.trim().replaceAll(RegExp(r'^"|"$'), '');
+      
+      // ล้างข้อมูลเศษระบบของเทมเพลต ChatML เผื่อโมเดลตัวเล็กพ่นหลุดออกมา
+      trimmed = trimmed.split('<|im_end|>')[0].trim();
+      trimmed = trimmed.split('<|im_start|>')[0].trim();
+      trimmed = trimmed.replaceAll(RegExp(r'^"|"$'), '');
+      
+      if (trimmed.isEmpty) return null;
+
+      // 5. Validation Guard: ตรวจสอบโครงสร้างภาษาไทยของคำที่ได้จาก AI อีกรอบ
+      if (thMapper.isValidPatternStrict(trimmed, '')) {
+        if (trimmed != sentence) {
+          return trimmed;
+        }
+      }
+    } catch (e) {
+      AppLogger.log("TinyMind Local AI Inference Error: $e");
+    }
+    return null;
+  }
+
+  // วิเคราะห์คำที่สลับแป้นทั้ง 2 ภาษา และให้ AI ระบุว่าคำไหนถูกต้องตามพจนานุกรม
+  static Future<String?> identifyCorrectWordAI(String wordEn, String wordTh) async {
+    final String lowerEn = wordEn.toLowerCase();
+    
+    // 1. ตรวจสอบความถูกต้องของคำอังกฤษ (Heuristics)
+    bool isEnValid = true;
+    if (lowerEn.isEmpty) {
+      isEnValid = false;
+    } else {
+      // 1.1 ห้ามมีตัวเลขปะปนในคำอังกฤษ (ยกเว้นตัวเลขล้วน)
+      if (RegExp(r'\d').hasMatch(lowerEn) && !RegExp(r'^\d+$').hasMatch(lowerEn)) {
+        isEnValid = false;
+      }
+      // 1.2 ห้ามมีเครื่องหมายวรรคตอนหรือสัญลักษณ์ปนในคำอังกฤษ (เช่น ; , . - _ @)
+      if (RegExp(r'[;,\.\-\_@#\$%\^&\*\(\)\[\]\{\}<>\\/|`~+=]').hasMatch(lowerEn)) {
+        isEnValid = false;
+      }
+      // 1.3 ถ้าคำยาวตั้งแต่ 3 ตัวอักษรขึ้นไป ต้องมีสระภาษาอังกฤษอย่างน้อย 1 ตัว
+      if (lowerEn.length >= 3) {
+        final hasVowel = RegExp(r'[aeiouy]').hasMatch(lowerEn);
+        if (!hasVowel) {
+          isEnValid = false;
+        }
+      }
+    }
+
+    // 2. ตรวจสอบความถูกต้องของคำไทย
+    bool isThValid = false;
+    final thMapper = _mappers.firstWhere((m) => m.languageCode == 'th');
+    if (wordTh.isNotEmpty) {
+      isThValid = thMapper.isValidPattern(wordTh);
+    }
+
+    // 3. กรองด้วยระบบ Heuristics 3 ชั้น เพื่อความรวดเร็วและปลอดภัยก่อนเรียก AI
+    final bool isCommonEn = _commonEnWords.contains(lowerEn) || userEnWords.contains(lowerEn);
+    final bool isCommonTh = thMapper.isCommonWord(wordTh);
+
+    // [RULE 1] ป้องกันคำขยะฝั่งอังกฤษ (เช่น 9i;0l หรือ mflv[) และยืนยันคำไทยที่สะกดถูกต้อง
+    if (!isEnValid && isThValid) {
+      AppLogger.log("TinyMind Heuristic [RULE 1]: English '$wordEn' is invalid, selecting Thai '$wordTh' directly.");
+      return wordTh;
+    }
+
+    // [RULE 2] การสลับเป็นอังกฤษทันทีเมื่อคำไทยสะกดผิดโครงสร้างธรรมชาติอย่างชัดเจน
+    if (isEnValid && !isThValid) {
+      AppLogger.log("TinyMind Heuristic [RULE 2 - Invalid Thai]: Selecting English '$wordEn' directly.");
+      return wordEn;
+    }
+
+    if (isEnValid && !thMapper.isValidPatternStrict(wordTh, '')) {
+      if (isCommonEn || lowerEn.length < 6) {
+        AppLogger.log("TinyMind Heuristic [RULE 2 - Strict Thai Failure]: Selecting English '$wordEn' directly.");
+        return wordEn;
+      }
+    }
+
+    // [RULE 3] ยึดภาษาไทยหากคู่คำภาษาอังกฤษไม่ใช่คำจริงในพจนานุกรม
+    if (isEnValid && isThValid) {
+      if (!isCommonEn && isCommonTh) {
+        AppLogger.log("TinyMind Heuristic [RULE 3a]: English '$wordEn' is not in Dict, but Thai '$wordTh' is common. Choosing Thai.");
+        return wordTh;
+      }
+    }
+
+    // 4. ถ้าไม่ถูกต้องทั้งคู่ -> คืนค่า null ทันทีโดยไม่ต้องเรียก AI
+    if (!isEnValid && !isThValid) {
+      AppLogger.log("TinyMind Heuristic: Both words are invalid (En='$wordEn', Th='$wordTh'). Wait for more input.");
+      return null;
+    }
+
+    // 5. ถ้าไม่ใช่คำทั่วไปทั้งคู่ และความยาวคำสะสมสั้น (< 6 ตัวอักษร) -> คืน null ทันทีเพื่อรอพิมพ์คำให้เสร็จ
+    if (!isCommonEn && !isCommonTh && wordEn.length < 6) {
+      AppLogger.log("TinyMind Heuristic: Neither word in Dict and length < 6. Wait for more input.");
+      return null;
+    }
+
+    // 6. ถ้าผ่าน Heuristics 3 ชั้นมาได้ ค่อยส่งให้ AI ตัดสินใจ (Qwen 1.5B/1.7B)
     if (_llama == null) {
       AppLogger.log("TinyMind AI: Model is not loaded yet.");
       return null;
@@ -432,27 +615,56 @@ class AutocorrectEngine {
 
     try {
       _llama!.clear();
-      
-      final prompt = """
-You are an advanced real-time autocorrection tool.
-Fix any spelling mistakes, typos, or keyboard layout errors (e.g. typing Thai words using English keyboard layout or vice versa) in the provided text.
-Preserve the original meaning, punctuation, and casing as much as possible.
-Output ONLY the corrected text. Do NOT explain your changes. Do NOT wrap in quotes.
 
-Text to correct: "$sentence"
-Corrected Text:""";
+      // ปรับปรุง Prompt ให้เหมาะสมกับการเป็น Linguistic Classifier สำหรับ Qwen
+      final prompt = """<|im_start|>system
+You are a bilingual linguistic classifier.
+Analyze the following two candidate words (one English, one Thai). One of them was typed using the incorrect keyboard layout.
+Determine which word is correct, meaningful, and grammatically valid in its respective language.
+
+Output ONLY the chosen correct word.
+If both are valid words, output the most common and meaningful one.
+If neither is a correct or meaningful word, output "NONE".
+Do NOT explain your reasoning. Do NOT wrap the output in quotes.
+
+Examples:
+- English: "code", Thai: "แเนำ" -> "code"
+- English: "helo", Thai: "เหัล" -> "NONE"
+- English: "computr", Thai: "คอมพิวเตอร์" -> "คอมพิวเตอร์"
+- English: "qwxzcv", Thai: "ๆไผปแฮ" -> "NONE"
+<|im_end|>
+<|im_start|>user
+English: "$wordEn", Thai: "$wordTh"<|im_end|>
+<|im_start|>assistant
+""";
 
       _llama!.setPrompt(prompt);
       
-      // สั่ง Generate ข้อความแบบสมบูรณ์
-      final correctedText = await _llama!.generateCompleteText(maxTokens: 50);
-      final trimmed = correctedText.trim().replaceAll(RegExp(r'^"|"$'), '');
+      final output = await _llama!.generateCompleteText(maxTokens: 15);
+      var trimmed = output.trim().replaceAll(RegExp(r'^"|"$'), '');
+      trimmed = trimmed.split('<|im_end|>')[0].trim();
+      trimmed = trimmed.split('<|im_start|>')[0].trim();
+      trimmed = trimmed.replaceAll(RegExp(r'^"|"$'), '');
       
-      if (trimmed.isNotEmpty && trimmed != sentence) {
-        return trimmed;
+      if (trimmed == "NONE" || trimmed.isEmpty) {
+        return null;
+      }
+      
+      final String lowerTrimmed = trimmed.toLowerCase();
+      final String lowerEn = wordEn.toLowerCase();
+
+      // คืนคำที่ได้จากการตัดสินใจของ AI โดยเช็คความยืดหยุ่น (contains)
+      if (lowerTrimmed == "none") {
+        return null;
+      }
+      if (lowerTrimmed == lowerEn || lowerTrimmed.contains(lowerEn)) {
+        return wordEn;
+      }
+      if (trimmed == wordTh || trimmed.contains(wordTh)) {
+        return wordTh;
       }
     } catch (e) {
-      AppLogger.log("TinyMind Local AI Inference Error: $e");
+      AppLogger.log("TinyMind AI identifyCorrectWordAI Error: $e");
     }
     return null;
   }

@@ -13,6 +13,9 @@ class AppDelegate: FlutterAppDelegate {
     var hotkeyKey: String = "Backspace"
     var useCustomHotkey: Bool = false
     
+    // Enter Block Control for AI
+    var needsAutocorrect: Bool = false
+    
     override func applicationDidFinishLaunching(_ notification: Notification) {
         print("AppDelegate: applicationDidFinishLaunching starting...")
         fflush(stdout)
@@ -128,6 +131,27 @@ class AppDelegate: FlutterAppDelegate {
                 } else {
                     result(FlutterError(code: "INVALID_ARGUMENT", message: "Missing modifier, key, or useCustom", details: nil))
                 }
+            } else if call.method == "showDockIcon" {
+                DispatchQueue.main.async {
+                    NSApp.setActivationPolicy(.regular)
+                }
+                result(true)
+            } else if call.method == "hideDockIcon" {
+                DispatchQueue.main.async {
+                    NSApp.setActivationPolicy(.accessory)
+                }
+                result(true)
+            } else if call.method == "updateBufferStatus" {
+                if let args = call.arguments as? [String: Any],
+                   let status = args["needsAutocorrect"] as? Bool {
+                    self?.needsAutocorrect = status
+                    result(true)
+                } else {
+                    result(false)
+                }
+            } else if call.method == "releaseEnter" {
+                self?.releaseEnter()
+                result(true)
             } else {
                 result(FlutterMethodNotImplemented)
             }
@@ -138,13 +162,22 @@ class AppDelegate: FlutterAppDelegate {
         return false
     }
     
-    // บังคับซ่อน Dock icon ทุกครั้งที่ app กลับมา active
+    // บังคับซ่อน Dock icon ทุกครั้งที่ app กลับมา active (เฉพาะกรณีไม่มีหน้าต่างหลักเปิดอยู่)
     override func applicationDidBecomeActive(_ notification: Notification) {
         super.applicationDidBecomeActive(notification)
-        if NSApp.activationPolicy() != .accessory {
-            NSApp.setActivationPolicy(.accessory)
-            print("AppDelegate: applicationDidBecomeActive - forced .accessory policy")
-            fflush(stdout)
+        var isAnyWindowVisible = false
+        for window in NSApp.windows {
+            if window.isVisible && window.className.contains("FlutterWindow") {
+                isAnyWindowVisible = true
+                break
+            }
+        }
+        if !isAnyWindowVisible {
+            if NSApp.activationPolicy() != .accessory {
+                NSApp.setActivationPolicy(.accessory)
+                print("AppDelegate: applicationDidBecomeActive - forced .accessory policy because no window is visible")
+                fflush(stdout)
+            }
         }
     }
     
@@ -193,9 +226,39 @@ class AppDelegate: FlutterAppDelegate {
         }
     }
     
+    func releaseEnter() {
+        print("AppDelegate: Releasing Enter event to system")
+        fflush(stdout)
+        if let eventTap = eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+        }
+        
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let down = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: true) // 0x24 is Return
+        let up = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: false)
+        
+        down?.post(tap: .cghidEventTap)
+        up?.post(tap: .cghidEventTap)
+        
+        if let eventTap = eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+        }
+    }
+    
     func handleKeyEvent(_ event: CGEvent) -> CGEvent? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
+        
+        // 0. ดักจับและบล็อก Enter สำหรับ AI Autocorrection
+        if keyCode == 36 || keyCode == 76 { // Return / Enter
+            if needsAutocorrect {
+                print("AppDelegate: Enter blocked for AI autocorrection")
+                fflush(stdout)
+                needsAutocorrect = false // เคลียร์ทันทีเพื่อป้องกัน loop
+                channel?.invokeMethod("onEnterTriggered", arguments: nil)
+                return nil // บล็อกปุ่ม Enter
+            }
+        }
         
         // Check hotkey matches
         if useCustomHotkey {

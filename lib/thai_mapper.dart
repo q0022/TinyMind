@@ -138,16 +138,38 @@ class ThaiMapper implements LanguageMapper {
     final matches = RegExp(r'[ก-ฮๆฯ]{4,}').allMatches(thText);
     for (final match in matches) {
       final seq = match.group(0)!;
-      if (seq.length >= 5) return false; // พยัญชนะซ้อนกัน 5 ตัวขึ้นไปไม่มีในภาษาไทยปกติ
+      if (seq.length >= 5) {
+        // อนุญาตให้มีพยัญชนะซ้อนกันได้สูงสุด 7 ตัว หากมี อ, ร, ว, ย อยู่ด้วย (ซึ่งมักทำหน้าที่เป็นสระหรือตัวควบกล้ำ เช่น ทดสอบการ...)
+        final hasVocalic = RegExp(r'[อรวย]');
+        if (!hasVocalic.hasMatch(seq) || seq.length >= 8) {
+          return false;
+        }
+      }
       if (seq.length == 4) {
-        // พยัญชนะซ้อนกัน 4 ตัว ต้องมี รร (รหัน), ว, อ หรือเป็นคำว่า พรหม
+        // พยัญชนะซ้อนกัน 4 ตัว ต้องมี รร (รหัน), ว, อ, ร, ย หรือเป็นคำว่า พรหม
         if (!seq.contains('รร') &&
             !seq.contains('ว') &&
             !seq.contains('อ') &&
+            !seq.contains('ร') &&
+            !seq.contains('ย') &&
             seq != 'พรหม') {
           return false;
         }
       }
+    }
+
+    // ตรวจสอบคู่สะกดท้ายคำที่ผิดธรรมชาติ (เช่น สะกดคู่ที่ลงท้ายด้วย ส, ศ, ษ, หรือพยัญชนะสะกดคู่อื่นๆ ที่ไม่มีอยู่จริงในภาษาไทยท้ายคำ)
+    if (thText.length >= 3) {
+      final lastTwo = thText.substring(thText.length - 2);
+      const invalidEndings = {'นส', 'ฟส', 'ทส', 'ปส', 'มส', 'กส', 'พส', 'ดส'};
+      if (invalidEndings.contains(lastTwo)) {
+        return false;
+      }
+    }
+
+    // สระอำ (ำ) ห้ามมีพยัญชนะสะกดตามหลังท้ายคำเดี่ยว
+    if (RegExp(r'ำ[ก-ฮ]$').hasMatch(thText)) {
+      return false;
     }
 
     // คำที่ยาวตั้งแต่ 5 ตัวอักษรขึ้นไป ต้องมีสระหรือวรรณยุกต์อย่างน้อย 1 ตัว

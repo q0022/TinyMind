@@ -46,6 +46,14 @@ void main() async {
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
+    if (Platform.isMacOS) {
+      try {
+        const platform = MethodChannel('com.tinymind.app/keyboard');
+        await platform.invokeMethod('showDockIcon');
+      } catch (e) {
+        // ignore
+      }
+    }
     await windowManager.show();
     await windowManager.focus();
     await windowManager.setPreventClose(true); // ป้องกันไม่ให้กดปิดแล้วปิดโปรเจกต์ (ให้ซ่อนลง Tray แทน)
@@ -143,6 +151,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _isAutoSwitchOnLength = true;
   int _autoSwitchLength = 8;
   bool _isLayoutDecidedForCurrentWord = false;
+  int _lastCheckedLen = 0;
+  bool _continuousSwitchStopped = false;
   String _hotkeyModifier = 'Shift';
   String _hotkeyKey = 'Backspace';
   bool _useCustomHotkey = false;
@@ -268,6 +278,9 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           break;
         case 'onHotkey':
           _handleHotkey();
+          break;
+        case 'onEnterTriggered':
+          await _handleEnterTriggered();
           break;
       }
     });
@@ -436,6 +449,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _isAiCorrection = prefs.getBool('isAiCorrection') ?? false;
       _ggufModelPath = prefs.getString('ggufModelPath') ?? '';
       
+      // บังคับเปลี่ยนผ่านทางพัฒนาไปใช้ Qwen 2.5 1.5B หากมีไฟล์อยู่จริงเพื่อความมั่นใจในการทดสอบของพี่บอย
+      const targetQwenPath = '/Users/q0022/sites/TinyMind/assets/models/qwen2.5-1.5b-instruct-q4_k_m.gguf';
+      if (File(targetQwenPath).existsSync() && !_ggufModelPath.contains('qwen2.5-1.5b')) {
+        _ggufModelPath = targetQwenPath;
+        _saveSetting('ggufModelPath', targetQwenPath);
+      }
+      
       // การย้ายระบบผู้ใช้เก่า (Migration): หากใช้ qwen3-0.6b หรือรุ่นเก่า ให้เคลียร์เพื่อเปลี่ยนเป็น smollm2
       // และลบไฟล์เก่าทิ้งเพื่อคืนพื้นที่ดิสก์ให้ผู้ใช้งาน
       if (_ggufModelPath.isNotEmpty && 
@@ -469,20 +489,30 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       // ค้นหาโมเดลในเครื่องโดยอัตโนมัติหากยังไม่ได้ตั้งค่า
       if (_ggufModelPath.isEmpty) {
         getApplicationSupportDirectory().then((dir) {
-          final modelFile = File('${dir.path}/models/smollm2-360m-instruct-q4_k_m.gguf');
-          if (modelFile.existsSync()) {
+          final qwenFile = File('${dir.path}/models/qwen2.5-1.5b-instruct-q4_k_m.gguf');
+          final smolFile = File('${dir.path}/models/smollm2-360m-instruct-q4_k_m.gguf');
+          
+          if (qwenFile.existsSync()) {
             setState(() {
-              _ggufModelPath = modelFile.path;
+              _ggufModelPath = qwenFile.path;
             });
-            _saveSetting('ggufModelPath', modelFile.path);
+            _saveSetting('ggufModelPath', qwenFile.path);
+          } else if (smolFile.existsSync()) {
+            setState(() {
+              _ggufModelPath = smolFile.path;
+            });
+            _saveSetting('ggufModelPath', smolFile.path);
           } else {
             // เช็คในโฟลเดอร์พัฒนาของเครื่องพี่บอยเพื่อความรวดเร็วในการทดสอบ
-            const devPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
-            if (File(devPath).existsSync()) {
+            const qwenDevPath = '/Users/q0022/sites/TinyMind/assets/models/qwen2.5-1.5b-instruct-q4_k_m.gguf';
+            const smolDevPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
+            final defaultPath = File(qwenDevPath).existsSync() ? qwenDevPath : smolDevPath;
+            
+            if (File(defaultPath).existsSync()) {
               setState(() {
-                _ggufModelPath = devPath;
+                _ggufModelPath = defaultPath;
               });
-              _saveSetting('ggufModelPath', devPath);
+              _saveSetting('ggufModelPath', defaultPath);
             }
           }
         });
@@ -649,6 +679,56 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     }
   }
 
+  // อัปเกรดโมเดลจาก SmolLM2 เป็น Qwen 2.5 1.5B พร้อมลบไฟล์เก่าทิ้งเพื่อคืนพื้นที่
+  Future<void> _upgradeToQwenModel() async {
+    try {
+      final directory = await getApplicationSupportDirectory();
+      final modelsDir = Directory('${directory.path}/models');
+      
+      // ปิดการทำงานของ AI เพื่อคืนทรัพยากรและปลดล็อกไฟล์โมเดลก่อนลบ
+      AutocorrectEngine.disposeAI();
+      
+      // ลบโมเดล SmolLM2 เก่า
+      final smolFile = File('${modelsDir.path}/smollm2-360m-instruct-q4_k_m.gguf');
+      if (smolFile.existsSync()) {
+        try {
+          await smolFile.delete();
+          AppLogger.log("TinyMind: Old SmolLM2 model deleted successfully.");
+        } catch (e) {
+          AppLogger.log("TinyMind: Failed to delete old SmolLM2 model: $e");
+        }
+      }
+      
+      setState(() {
+        _ggufModelPath = '';
+      });
+      await _saveSetting('ggufModelPath', '');
+      
+      // เริ่มกระบวนการดาวน์โหลด Qwen
+      final path = await _checkAndPrepareModel();
+      setState(() {
+        _ggufModelPath = path;
+        _isAiCorrection = true;
+      });
+      await _saveSetting('ggufModelPath', path);
+      await _saveSetting('isAiCorrection', true);
+      
+      await _initLocalLlama(path);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("อัปเกรดเป็นโมเดล Qwen 2.5 1.5B เรียบร้อยแล้วค่ะ! 🎉")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${AppTranslations.translate('model_prepare_failed', _displayLanguage)}$e")),
+        );
+      }
+    }
+  }
+
   // เช็คและเตรียมไฟล์โมเดล (คัดลอกในเครื่อง หรือดาวน์โหลดจากคลาวด์)
   Future<String> _checkAndPrepareModel() async {
     final directory = await getApplicationSupportDirectory();
@@ -657,13 +737,26 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       modelsDir.createSync(recursive: true);
     }
     
+    // ตั้งค่า Qwen เป็นตัวเลือกอันดับแรก
+    final qwenFile = File('${modelsDir.path}/qwen2.5-1.5b-instruct-q4_k_m.gguf');
+    if (qwenFile.existsSync()) {
+      return qwenFile.path;
+    }
     final modelFile = File('${modelsDir.path}/smollm2-360m-instruct-q4_k_m.gguf');
     if (modelFile.existsSync()) {
       return modelFile.path;
     }
     
     // ลองคัดลอกไฟล์พัฒนาในเครื่องผู้พัฒนาเพื่อประหยัดเน็ตก่อน
-    const devPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
+    const qwenDevPath = '/Users/q0022/sites/TinyMind/assets/models/qwen2.5-1.5b-instruct-q4_k_m.gguf';
+    const smolDevPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
+    final devPath = File(qwenDevPath).existsSync() ? qwenDevPath : smolDevPath;
+    
+    // หากอยู่ในเครื่องผู้พัฒนาและมีไฟล์ใดไฟล์หนึ่ง ให้เลือกคัดลอกไฟล์นั้น
+    final targetFile = File(devPath).existsSync()
+        ? (devPath == qwenDevPath ? qwenFile : modelFile)
+        : qwenFile;
+    
     if (File(devPath).existsSync()) {
       setState(() {
         _isDownloading = true;
@@ -674,7 +767,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       final sourceFile = File(devPath);
       final totalBytes = sourceFile.lengthSync();
       final input = sourceFile.openRead();
-      final output = modelFile.openWrite();
+      final output = targetFile.openWrite();
       int copiedBytes = 0;
       
       await for (var chunk in input) {
@@ -691,16 +784,17 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       setState(() {
         _isDownloading = false;
       });
-      return modelFile.path;
+      return targetFile.path;
     }
     
-    // ดาวน์โหลดจริงผ่านลิงก์ HuggingFace CDN
-    await _downloadModelFromUrl(modelFile);
-    return modelFile.path;
+    // ดาวน์โหลดจริงผ่านลิงก์ HuggingFace CDN ของ Qwen 2.5 1.5B Instruct GGUF
+    const qwenUrl = 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf';
+    await _downloadModelFromUrl(qwenFile, qwenUrl);
+    return qwenFile.path;
   }
 
   // ดาวน์โหลดไฟล์จากอินเทอร์เน็ตพร้อมเช็คสถานะ Progress
-  Future<void> _downloadModelFromUrl(File targetFile) async {
+  Future<void> _downloadModelFromUrl(File targetFile, String urlString) async {
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0.0;
@@ -711,7 +805,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     try {
       final request = http.Request(
         'GET',
-        Uri.parse('https://huggingface.co/unsloth/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf'),
+        Uri.parse(urlString),
       );
       final response = await client.send(request);
       
@@ -719,7 +813,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         throw Exception('ไม่สามารถดาวน์โหลดไฟล์ได้จากเซิร์ฟเวอร์ (รหัสข้อผิดพลาด HTTP ${response.statusCode})');
       }
       
-      final totalBytes = response.contentLength ?? 271000000;
+      // ขนาดไฟล์โดยประมาณของ Qwen 2.5 1.5B Instruct Q4_K_M (1.04 GiB)
+      final totalBytes = response.contentLength ?? 1116914944;
       int downloadedBytes = 0;
       final sink = targetFile.openWrite();
       
@@ -746,10 +841,33 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     }
   }
 
+  Future<void> _showWindow() async {
+    if (Platform.isMacOS) {
+      try {
+        await _platform.invokeMethod('showDockIcon');
+      } catch (e) {
+        AppLogger.log("Failed to show Dock icon: $e");
+      }
+    }
+    await windowManager.show();
+    await windowManager.focus();
+  }
+
+  Future<void> _hideWindow() async {
+    await windowManager.hide();
+    if (Platform.isMacOS) {
+      try {
+        await _platform.invokeMethod('hideDockIcon');
+      } catch (e) {
+        AppLogger.log("Failed to hide Dock icon: $e");
+      }
+    }
+  }
+
   // จัดการเมื่อกดปุ่มปิดหน้าต่าง (ให้ซ่อนลง System Tray แทน)
   @override
   void onWindowClose() async {
-    await windowManager.hide();
+    await _hideWindow();
   }
 
   // ตั้งค่า System Tray
@@ -764,7 +882,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
       _systemTray.registerSystemTrayEventHandler((eventName) {
         if (eventName == kSystemTrayEventClick) {
-          Platform.isMacOS ? _systemTray.popUpContextMenu() : windowManager.show();
+          Platform.isMacOS ? _systemTray.popUpContextMenu() : _showWindow();
         } else if (eventName == kSystemTrayEventRightClick) {
           _systemTray.popUpContextMenu();
         }
@@ -788,7 +906,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       await newMenu.buildFrom([
         MenuItemLabel(
           label: AppTranslations.translate('tray_open', _displayLanguage),
-          onClicked: (menuItem) => windowManager.show(),
+          onClicked: (menuItem) => _showWindow(),
         ),
         MenuItemLabel(
           label: _isEnabled 
@@ -836,6 +954,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       
       // ชะลอการล้างสะสมตัวเคาะวรรค/จบประโยคลงในบัฟเฟอร์ เพื่อให้ปุ่ม Hotkey ทำงานได้ย้อนหลัง 1 คำ
       _currentBuffer += char;
+      _syncBufferStatus(); // Sync หลังจากต่อ space
     } else {
       // 2. ถ้าเริ่มพิมพ์ตัวอักษรถัดไป ให้ล้างประวัติคำก่อนหน้าที่เคาะวรรคไปแล้ว
       if (_currentBuffer.isNotEmpty) {
@@ -843,119 +962,163 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         if (lastChar == ' ' || lastChar == '\n' || lastChar == '\r' || lastChar == '\t') {
           _currentBuffer = '';
           _isLayoutDecidedForCurrentWord = false;
+          _continuousSwitchStopped = false;
+          _lastCheckedLen = 0;
         }
       }
 
       // ตัวอักษรปกติ -> เพิ่มเข้าบัฟเฟอร์
       _currentBuffer += char;
-      if (!_isLayoutDecidedForCurrentWord) {
+      if (!_isLayoutDecidedForCurrentWord && !_continuousSwitchStopped) {
         _checkContinuousBufferCorrection();
       }
+      _syncBufferStatus(); // Sync
     }
   }
 
-  // สลับภาษาอัตโนมัติเมื่อความยาวตัวอักษรถึงเกณฑ์ขั้นต่ำ
-  void _checkContinuousBufferCorrection() {
+  // สลับภาษาอัตโนมัติเมื่อความยาวตัวอักษรถึงเกณฑ์ขั้นต่ำ (ตรวจจับ 3 รอบ และส่งเสียง Beep หากตัดสินไม่ได้)
+  void _checkContinuousBufferCorrection() async {
     if (!_isLocalCorrection || !_isAutoSwitchOnLength) return;
 
     final int len = _currentBuffer.length;
     final int startLen = _autoSwitchLength;
 
-    // ตรวจสอบเมื่อความยาวตัวอักษรตั้งแต่เกณฑ์ขั้นต่ำขึ้นไป เพื่อป้องกันการกดคีย์ข้ามด่านเวลาพิมพ์เร็ว
-    if (len >= startLen) {
+    // หากตัดสินไม่ได้และยาวถึงรอบสุดท้าย + 2 (เช่น >= startLen + 6) ให้ Beep 1 ครั้งและหยุดการตรวจ
+    if (len >= startLen + 6 && !_continuousSwitchStopped) {
+      _continuousSwitchStopped = true;
+      _syncBufferStatus();
       
-      // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผล (หากมี)
-      String trimmedWord = _currentBuffer;
-      String trailingPunctuation = '';
-      
-      final trailingRegExp = RegExp(r'([.,!?;:\-_()\[\]{}]+)$');
-      final match = trailingRegExp.firstMatch(_currentBuffer);
-      if (match != null) {
-        trailingPunctuation = match.group(1)!;
-        trimmedWord = _currentBuffer.substring(0, _currentBuffer.length - trailingPunctuation.length);
+      try {
+        await SystemSound.play(SystemSoundType.alert);
+      } catch (e) {
+        // ignore
       }
+      
+      AppLogger.log("Dart: _checkContinuousBufferCorrection: reached final checkpoint (${startLen + 6}) without layout decision. Beeped and stopped continuous checks.");
+      return;
+    }
 
-      if (trimmedWord.isEmpty) return;
+    // ตรวจสอบว่าความยาวเข้าเกณฑ์รอบใดรอบหนึ่ง และรอบนั้นยังไม่เคยถูกตรวจ
+    bool shouldCheck = false;
+    if (len == startLen && _lastCheckedLen < startLen) {
+      shouldCheck = true;
+    } else if (len == startLen + 2 && _lastCheckedLen < startLen + 2) {
+      shouldCheck = true;
+    } else if (len == startLen + 4 && _lastCheckedLen < startLen + 4) {
+      shouldCheck = true;
+    }
 
-      // ตรวจสอบว่าคำนี้อยู่ในรายการละเว้นหรือไม่
-      if (_ignoredWords.contains(trimmedWord.toLowerCase())) {
-        _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อไม่เช็คซ้ำ
+    if (!shouldCheck) return;
+
+    // อัปเดตความยาวที่ทำการตรวจสอบล่าสุดเพื่อไม่ให้เรียกซ้ำ
+    _lastCheckedLen = len;
+
+    // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผล (หากมี)
+    String trimmedWord = _currentBuffer;
+    String trailingPunctuation = '';
+    
+    final trailingRegExp = RegExp(r'([.,!?;:\-_()\[\]{}]+)$');
+    final match = trailingRegExp.firstMatch(_currentBuffer);
+    if (match != null) {
+      trailingPunctuation = match.group(1)!;
+      trimmedWord = _currentBuffer.substring(0, _currentBuffer.length - trailingPunctuation.length);
+    }
+
+    if (trimmedWord.isEmpty) return;
+
+    // ตรวจสอบรายการละเว้น
+    if (_ignoredWords.contains(trimmedWord.toLowerCase())) {
+      _isLayoutDecidedForCurrentWord = true; 
+      _continuousSwitchStopped = true;
+      return;
+    }
+
+    // 1. ตรวจสอบพจนานุกรม Dict ก่อน (หลักการข้อ 2: หากสลับแล้วตรงกับคำใน Dict ถือว่าสิ้นสุด)
+    final CorrectionResult? dictResult = AutocorrectEngine.checkAndCorrectLocalStrict(trimmedWord);
+    if (dictResult != null && dictResult.correctedWord != trimmedWord) {
+      _applyDictCorrection(trimmedWord, dictResult, trailingPunctuation);
+      return;
+    }
+
+    // 2. ถ้าใน Dict ยังหาไม่พบ ให้ใช้โค้ดแปลงผังแป้นคีย์บอร์ด 2 ภาษาและส่งให้ AI ตัดสินใจ (หลักการข้อ 3)
+    if (AutocorrectEngine.isModelLoaded) {
+      final String expectedBuffer = _currentBuffer;
+      
+      final String wordEn = AutocorrectEngine.convertLayout(trimmedWord, languageCode: 'th', toTarget: false);
+      final String wordTh = AutocorrectEngine.convertLayout(trimmedWord, languageCode: 'th', toTarget: true);
+
+      AppLogger.log("Dart: AI checking bilingual correct layout: English='$wordEn', Thai='$wordTh'");
+      final String? decidedWord = await AutocorrectEngine.identifyCorrectWordAI(wordEn, wordTh);
+      AppLogger.log("Dart: AI decided layout word: '$decidedWord'");
+
+      // Race Condition Guard: ตรวจว่าผู้ใช้พิมพ์ตัวอื่นเพิ่มไประหว่างรอ AI หรือไม่
+      if (_currentBuffer != expectedBuffer) {
+        AppLogger.log("Dart: AI decided layout word discarded because buffer changed ('$_currentBuffer' != '$expectedBuffer')");
         return;
       }
 
-      // ถ้าเป็นคำภาษาอังกฤษที่รู้จัก/ถูกต้องแล้ว ให้ล็อกสถานะและข้ามการตรวจเพิ่มทันที
-      if (AutocorrectEngine.isCommonEnglishWord(trimmedWord)) {
-        _isLayoutDecidedForCurrentWord = true;
-        AppLogger.log("Dart: _checkContinuousBufferCorrection: detected common English word '$trimmedWord'. Locking layout.");
-        return;
-      }
-
-      final CorrectionResult? result = AutocorrectEngine.checkAndCorrectLocalStrict(trimmedWord);
-      final String? corrected = result?.correctedWord;
-      AppLogger.log("Dart: _checkContinuousBufferCorrection: len=$len, buffer='$_currentBuffer', trimmed='$trimmedWord', corrected='$corrected'");
-      
-      if (corrected != null && corrected != trimmedWord && result != null) {
-        // ลบความยาวของคำในบัฟเฟอร์ ณ ตอนนี้
-        final int backspaces = _currentBuffer.length;
+      if (decidedWord != null) {
+        final bool isTh = decidedWord == wordTh;
+        final String languageCode = isTh ? 'th' : 'en';
         
-        final bool isThaiCorrection = result.isToTargetLanguage && result.languageCode == 'th';
-        final String translatedTrailing = AutocorrectEngine.convertLayout(
-          trailingPunctuation,
-          languageCode: result.languageCode,
-          toTarget: result.isToTargetLanguage,
+        final dummyResult = CorrectionResult(
+          correctedWord: decidedWord,
+          languageCode: languageCode,
+          isToTargetLanguage: isTh,
         );
-        final String replacement = corrected + translatedTrailing;
 
-        _platform.invokeMethod('replaceText', {
-          'backspaces': backspaces,
-          'text': replacement,
-        });
-
-        // เซฟข้อมูลสำหรับการ Undo
-        _lastReplacement = {
-          'original': _currentBuffer,
-          'corrected': replacement,
-        };
-        _lastReplacementEndingChar = '';
-        _canUndo = true;
-
-        // อัปเดตสถิติ
-        setState(() {
-          _wordsCorrected++;
-          _layoutFixed++;
-          _savedChars += (corrected.length - trimmedWord.length).abs();
-          
-          _recentCorrections.insert(0, {
-            'original': trimmedWord,
-            'corrected': corrected,
-            'timestamp': DateTime.now().toString().substring(11, 19),
-            'type': 'Layout (Auto)'
-          });
-          if (_recentCorrections.length > 5) {
-            _recentCorrections.removeLast();
-          }
-        });
-
-        // แทนที่จะล้างบัฟเฟอร์ ให้เก็บคำที่ได้รับการแทนที่ล่าสุดไว้ เพื่อรองรับการพิมพ์ต่อหรือกด Hotkey แปลงกลับทั้งคำ
-        _currentBuffer = replacement;
-        _isLayoutDecidedForCurrentWord = true; // ล็อกเพื่อไม่เช็คซ้ำจนกว่าจะเว้นวรรก
-
-        // บันทึกสถิติลง DB
-        _saveSetting('wordsCorrected', _wordsCorrected);
-        _saveSetting('layoutFixed', _layoutFixed);
-        _saveSetting('savedChars', _savedChars);
-        _saveHistory();
-      } else {
-        // หากไม่สามารถแปลงสลับคีย์บอร์ดแล้วอ่านรู้เรื่อง
-        // และถ้าทดสอบความยาวสะสมจนถึงรอบสุดท้ายแล้ว (startLen + 6) ให้ล็อกสถานะหยุดเช็คไปเลยค่ะ
-        if (len >= startLen + 6) {
-          _isLayoutDecidedForCurrentWord = true;
-          AppLogger.log("Dart: _checkContinuousBufferCorrection: reached final checkpoint (${startLen + 6}). Locking layout.");
-        } else {
-          AppLogger.log("Dart: _checkContinuousBufferCorrection: ambiguous layout at len $len. Will check again at len ${len + 2}.");
-        }
+        _applyDictCorrection(trimmedWord, dummyResult, trailingPunctuation);
       }
     }
+  }
+
+  // ฟังก์ชันแยกสำหรับสลับภาษาระดับคำ (Dict/AI) และล็อกสถานะการตรวจสอบให้จบโดยสมบูรณ์
+  void _applyDictCorrection(String trimmedWord, CorrectionResult result, String trailingPunctuation) {
+    final int backspaces = _currentBuffer.length;
+    final String translatedTrailing = AutocorrectEngine.convertLayout(
+      trailingPunctuation,
+      languageCode: result.languageCode,
+      toTarget: result.isToTargetLanguage,
+    );
+    final String replacement = result.correctedWord + translatedTrailing;
+
+    _platform.invokeMethod('replaceText', {
+      'backspaces': backspaces,
+      'text': replacement,
+    });
+
+    _lastReplacement = {
+      'original': _currentBuffer,
+      'corrected': replacement,
+    };
+    _lastReplacementEndingChar = '';
+    _canUndo = true;
+
+    setState(() {
+      _wordsCorrected++;
+      _layoutFixed++;
+      _savedChars += (result.correctedWord.length - trimmedWord.length).abs();
+      
+      _recentCorrections.insert(0, {
+        'original': trimmedWord,
+        'corrected': result.correctedWord,
+        'timestamp': DateTime.now().toString().substring(11, 19),
+        'type': 'Layout (Auto)'
+      });
+      if (_recentCorrections.length > 5) {
+        _recentCorrections.removeLast();
+      }
+    });
+
+    _currentBuffer = replacement;
+    _isLayoutDecidedForCurrentWord = true; 
+    _continuousSwitchStopped = true; // สิ้นสุดการตรวจต่อเนื่องคำนี้ทันที
+    _syncBufferStatus();
+
+    _saveSetting('wordsCorrected', _wordsCorrected);
+    _saveSetting('layoutFixed', _layoutFixed);
+    _saveSetting('savedChars', _savedChars);
+    _saveHistory();
   }
 
   bool _isPunctuation(String char) {
@@ -963,14 +1126,46 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     return punctuation.contains(char);
   }
 
+  Future<void> _syncBufferStatus() async {
+    if (!_isLocalCorrection) return;
+    final bool needsAutocorrect = _currentBuffer.isNotEmpty && !_isLayoutDecidedForCurrentWord;
+    try {
+      await _platform.invokeMethod('updateBufferStatus', {'needsAutocorrect': needsAutocorrect});
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  Future<void> _handleEnterTriggered() async {
+    AppLogger.log("Dart: _handleEnterTriggered called. buffer='$_currentBuffer'");
+    if (_currentBuffer.isNotEmpty && !_isLayoutDecidedForCurrentWord) {
+      // เรียกใช้ autocorrection ด่วนสำหรับคำสุดท้าย (โดยไม่มีตัวอักษรลงท้าย endingChar = '')
+      await _processWordCorrection(_currentBuffer, '');
+    }
+    _clearBuffers();
+    
+    // อัปเดตสถานะกลับไปเป็น false ทันที
+    await _syncBufferStatus();
+    
+    // ปลดล็อกปุ่ม Enter ฝั่ง Swift
+    try {
+      await _platform.invokeMethod('releaseEnter');
+    } catch (e) {
+      AppLogger.log("Failed to release Enter in Swift: $e");
+    }
+  }
+
   void _handleBackspace() {
     _canUndo = false; // Invalidate undo on backspace
     _isLayoutDecidedForCurrentWord = false; // ปลดล็อกการตรวจภาษาเมื่อกดย้อนกลับ
+    _continuousSwitchStopped = false; // ปลดล็อกการหยุดเช็คต่อเนื่อง
+    _lastCheckedLen = 0;
     if (_currentBuffer.isNotEmpty) {
       _currentBuffer = _currentBuffer.substring(0, _currentBuffer.length - 1);
     } else if (_fullSentenceBuffer.isNotEmpty) {
       _fullSentenceBuffer = _fullSentenceBuffer.substring(0, _fullSentenceBuffer.length - 1);
     }
+    _syncBufferStatus(); // Sync
   }
 
   void _clearBuffers() {
@@ -978,9 +1173,83 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _fullSentenceBuffer = '';
     _canUndo = false;
     _isLayoutDecidedForCurrentWord = false;
+    _continuousSwitchStopped = false;
+    _lastCheckedLen = 0;
+    _syncBufferStatus(); // Sync
   }
   // ประมวลผลแก้ระดับคำ (Local - Zero Latency)
-  void _processWordCorrection(String word, String endingChar) {
+  void _applyWordCorrection(String originalWord, String endingChar, String corrected, CorrectionResult result) {
+    // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผล (หากมี)
+    String trimmedWord = originalWord;
+    String trailingPunctuation = '';
+    
+    final trailingRegExp = RegExp(r'([.,!?;:\-_()\[\]{}]+)$');
+    final match = trailingRegExp.firstMatch(originalWord);
+    if (match != null) {
+      trailingPunctuation = match.group(1)!;
+      trimmedWord = originalWord.substring(0, originalWord.length - trailingPunctuation.length);
+    }
+
+    // ลบเท่ากับความยาวของคำผิดเดิม + 1 (สำหรับ endingChar ที่เพิ่งพิมพ์ไปหน้าจอ)
+    final int backspaces = originalWord.length + endingChar.length;
+    
+    // แปลงแป้นพิมพ์ของตัวอักษรจบคำให้สอดคล้องกับภาษาที่ได้รับการตรวจแก้ด้วย
+    final String translatedTrailing = AutocorrectEngine.convertLayout(
+      trailingPunctuation,
+      languageCode: result.languageCode,
+      toTarget: result.isToTargetLanguage,
+    );
+    final String translatedEndingChar = AutocorrectEngine.convertLayout(
+      endingChar,
+      languageCode: result.languageCode,
+      toTarget: result.isToTargetLanguage,
+    );
+    final String replacement = corrected + translatedTrailing + translatedEndingChar;
+
+    _platform.invokeMethod('replaceText', {
+      'backspaces': backspaces,
+      'text': replacement,
+    });
+
+    // เซฟข้อมูลสำหรับการ Undo
+    _lastReplacement = {
+      'original': originalWord,
+      'corrected': corrected + translatedTrailing,
+    };
+    _lastReplacementEndingChar = endingChar;
+    _canUndo = true;
+
+    // แทนที่จะล้างบัฟเฟอร์ ให้เก็บคำที่ได้รับการแทนที่ล่าสุดไว้ เพื่อรองรับการพิมพ์ต่อหรือกด Hotkey แปลงกลับทั้งคำ
+    _currentBuffer = replacement;
+    _isLayoutDecidedForCurrentWord = true; // ล็อกเพื่อไม่เช็คซ้ำจนกว่าจะเว้นวรรก
+
+    // อัปเดตสถิติ
+    setState(() {
+      _wordsCorrected++;
+      _layoutFixed++;
+      _savedChars += (corrected.length - trimmedWord.length).abs();
+      
+      // เพิ่มในรายการประวัติล่าสุด
+      _recentCorrections.insert(0, {
+        'original': trimmedWord,
+        'corrected': corrected,
+        'timestamp': DateTime.now().toString().substring(11, 19),
+        'type': result.isToTargetLanguage ? 'Th Layout' : 'En Layout'
+      });
+      if (_recentCorrections.length > 5) {
+        _recentCorrections.removeLast();
+      }
+    });
+
+    // บันทึกสถิติลง DB
+    _saveSetting('wordsCorrected', _wordsCorrected);
+    _saveSetting('layoutFixed', _layoutFixed);
+    _saveSetting('savedChars', _savedChars);
+    _saveHistory();
+  }
+
+  // ประมวลผลแก้ระดับคำ (Local - Zero Latency + AI Fallback)
+  Future<void> _processWordCorrection(String word, String endingChar) async {
     // 0. ตรวจสอบคีย์ลัดคำย่อ (Text Shortcuts Expansion) ก่อนการแปลงภาษาอื่นๆ
     final shortcutKey = word.trim();
     if (_textShortcuts.containsKey(shortcutKey)) {
@@ -1044,62 +1313,55 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     final CorrectionResult? result = AutocorrectEngine.checkAndCorrectLocal(trimmedWord);
     final String? corrected = result?.correctedWord;
     AppLogger.log("Dart: _processWordCorrection: word='$word', trimmed='$trimmedWord', corrected='$corrected'");
+    
     if (corrected != null && corrected != trimmedWord && result != null) {
-      // ส่งคำสั่งลบและพิมพ์กลับไปยัง Native
-      // ลบเท่ากับความยาวของคำผิดเดิม + 1 (สำหรับ endingChar ที่เพิ่งพิมพ์ไปหน้าจอ)
-      final int backspaces = word.length + endingChar.length;
-      
-      // แปลงแป้นพิมพ์ของตัวอักษรจบคำให้สอดคล้องกับภาษาที่ได้รับการตรวจแก้ด้วย
-      final bool isThaiCorrection = result.isToTargetLanguage && result.languageCode == 'th';
-      final String translatedTrailing = AutocorrectEngine.convertLayout(
-        trailingPunctuation,
-        languageCode: result.languageCode,
-        toTarget: result.isToTargetLanguage,
-      );
-      final String translatedEndingChar = AutocorrectEngine.convertLayout(
-        endingChar,
-        languageCode: result.languageCode,
-        toTarget: result.isToTargetLanguage,
-      );
-      final String replacement = corrected + translatedTrailing + translatedEndingChar;
-
-      _platform.invokeMethod('replaceText', {
-        'backspaces': backspaces,
-        'text': replacement,
-      });
-
-      // เซฟข้อมูลสำหรับการ Undo
-      _lastReplacement = {
-        'original': word,
-        'corrected': corrected + translatedTrailing,
-      };
-      _lastReplacementEndingChar = endingChar;
-      _canUndo = true;
-      _isLayoutDecidedForCurrentWord = true;
-
-      // อัปเดตสถิติ
-      setState(() {
-        _wordsCorrected++;
-        _layoutFixed++;
-        _savedChars += (corrected.length - trimmedWord.length).abs();
-        
-        // เพิ่มในรายการประวัติล่าสุด
-        _recentCorrections.insert(0, {
-          'original': trimmedWord,
-          'corrected': corrected,
-          'timestamp': DateTime.now().toString().substring(11, 19),
-          'type': 'Layout'
-        });
-        if (_recentCorrections.length > 5) {
-          _recentCorrections.removeLast();
+      // 1. ส่งคำสั่งแก้ไขผ่าน Local Rules (0ms)
+      _applyWordCorrection(word, endingChar, corrected, result);
+    } else {
+      // 2. ถ้า Local ไม่พบคำศัพท์ และเปิดสวิตช์ AI + โหลดโมเดลเสร็จแล้ว -> ส่งให้ AI ช่วยสแกน
+      if (_isAiCorrection && AutocorrectEngine.isModelLoaded) {
+        // กรองคำที่พิมพ์ถูกต้องตามเลย์เอาต์ปัจจุบันอยู่แล้ว เพื่อหลีกเลี่ยงการหน่วงเวลาเรียก AI
+        if (AutocorrectEngine.isLikelyCorrectInCurrentLayout(trimmedWord)) {
+          AppLogger.log("Dart: _processWordCorrection: word '$trimmedWord' is likely correct in current layout. Skipping AI fallback.");
+          return;
         }
-      });
 
-      // บันทึกสถิติลง DB
-      _saveSetting('wordsCorrected', _wordsCorrected);
-      _saveSetting('layoutFixed', _layoutFixed);
-      _saveSetting('savedChars', _savedChars);
-      _saveHistory();
+        final String expectedBuffer = _currentBuffer; // บันทึกสถานะบัฟเฟอร์ก่อนเรียก AI
+        
+        AppLogger.log("Dart: _processWordCorrection: calling AI fallback for word '$trimmedWord'");
+        final String? aiCorrected = await AutocorrectEngine.checkAndCorrectAI(trimmedWord);
+        AppLogger.log("Dart: _processWordCorrection: AI fallback result for word '$trimmedWord' is '$aiCorrected'");
+        
+        // Race Condition Guard: ตรวจสอบว่าผู้ใช้พิมพ์ตัวอื่นต่อหรือลบไประหว่างรอผลลัพธ์หรือไม่
+        // (ยอมรับกรณีที่บัฟเฟอร์เพิ่มแค่ตัวอักษรลงท้าย endingChar เช่น เคาะเว้นวรรค หรือ Enter)
+        final bool isBufferValid = _currentBuffer == expectedBuffer || 
+                                   _currentBuffer == expectedBuffer + endingChar ||
+                                   _currentBuffer.trim() == expectedBuffer.trim();
+        if (!isBufferValid) {
+          AppLogger.log("Dart: _processWordCorrection: AI result discarded because buffer changed ('$_currentBuffer' != '$expectedBuffer')");
+          return;
+        }
+        
+        if (aiCorrected != null && aiCorrected != trimmedWord) {
+          // วิเคราะห์ทิศทางการสลับเลย์เอาต์ (ไทย -> อังกฤษ หรือ อังกฤษ -> ไทย)
+          final bool isThCorrected = RegExp(r'[ก-์]').hasMatch(aiCorrected);
+          final String languageCode = isThCorrected ? 'th' : 'en';
+          
+          final dummyResult = CorrectionResult(
+            correctedWord: aiCorrected,
+            languageCode: languageCode,
+            isToTargetLanguage: isThCorrected,
+          );
+          
+          _applyWordCorrection(word, endingChar, aiCorrected, dummyResult);
+          
+          // อัปเดตสถิติจำนวน AI requests
+          setState(() {
+            _aiRequests++;
+          });
+          _saveSetting('aiRequests', _aiRequests);
+        }
+      }
     }
   }
 
@@ -1111,6 +1373,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _saveSetting('hotkeyCount', _hotkeyCount);
     AppLogger.log("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'. Total hotkey triggers: $_hotkeyCount");
     _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อประหยัด CPU และลดความขัดแย้ง
+    _continuousSwitchStopped = true; // สิ้นสุดการตรวจต่อเนื่องคำนี้ทันที (หลักการข้อ 1)
     // 1. ลองดึงข้อมูลจากการแทนที่ล่าสุดเพื่อทำ Smart Undo (กู้คืนย้อนหลังทั้งคำ)
     // ถึงแม้จะพิมพ์ตัวอักษรเพิ่มไปแล้ว 1-2 ตัวหลังจากโดนแอปแก้ไข หากบัฟเฟอร์ยังขึ้นต้นด้วยคำที่แอปแก้
     // เราจะดึงคีย์ดั้งเดิมทั้งหมดพร้อมแปลงตัวต่อท้ายกลับคืนให้ทั้งยวง
@@ -1433,7 +1696,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
                 // ปิดหน้าต่าง (Close - ซ่อนไปเมนู Tray)
                 IconButton(
                   icon: const Icon(Icons.close, size: 16),
-                  onPressed: () => windowManager.hide(),
+                  onPressed: () => _hideWindow(),
                   splashRadius: 16,
                   color: Colors.redAccent.withOpacity(0.8),
                 ),

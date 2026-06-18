@@ -31,5 +31,30 @@ void main() {
     final result2 = AutocorrectEngine.checkAndCorrectLocal('f7d');
     expect(result2, isNotNull);
     expect(result2!.correctedWord, equals('ดึก'));
+
+    // 3. Test isLikelyCorrectInCurrentLayout
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('สคริปต์'), isTrue);
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ฟกอฟืแำ'), isFalse); // invalid Thai pattern
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('biodiversity'), isTrue); // valid English pattern
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('mflv[dkirb,rN'), isFalse); // invalid English pattern (contains [ and ,)
+
+    // 4. Test relaxation of consonant limit in strict check
+    final longWordResult = AutocorrectEngine.checkAndCorrectLocalStrict('mflv[dkirb,');
+    expect(longWordResult, isNotNull);
+    expect(longWordResult!.correctedWord, equals('ทดสอบการพิม'));
+
+    // 5. Test Safe Heuristics (RULE 1, 2, 3) in identifyCorrectWordAI (No model loaded tests)
+    // RULE 1: English is invalid (has number/punctuation), Thai is valid -> Choose Thai
+    AutocorrectEngine.identifyCorrectWordAI('9i;0l', 'ตรวจสอบ').then((res) {
+      expect(res, equals('ตรวจสอบ'));
+    });
+    AutocorrectEngine.identifyCorrectWordAI('mflv[', 'ทดสอบ').then((res) {
+      expect(res, equals('ทดสอบ'));
+    });
+
+    // RULE 2: Thai is invalid, English is valid & common or short -> Choose English
+    AutocorrectEngine.identifyCorrectWordAI('code', 'แเนำ').then((res) {
+      expect(res, equals('code'));
+    });
   });
 }

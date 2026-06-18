@@ -83,7 +83,8 @@ class AppTranslations {
       // Dialogs
       'model_prepare_failed': 'เตรียมโมเดลล้มเหลว: ',
       'model_pick_failed': 'เกิดข้อผิดพลาดในการเลือกไฟล์: ',
-      'model_connecting': 'กำลังเชื่อมต่อเซิร์ฟเวอร์เพื่อดาวน์โหลดโมเดล AI (398 MB)...',
+      'upgrade_to_qwen_btn': '✨ อัปเกรดเป็นโมเดล Qwen 1.5B (แนะนำ - ฉลาดกว่ามาก)',
+      'model_connecting': 'กำลังเชื่อมต่อเซิร์ฟเวอร์เพื่อดาวน์โหลดโมเดล AI (1.04 GB)...',
       'model_copying_dev': 'ตรวจพบไฟล์โมเดลในโปรเจกต์ กำลังคัดลอกไฟล์เข้าเครื่อง...',
       'model_copying_progress': 'กำลังคัดลอกโมเดล...',
       'model_downloading_progress': 'กำลังดาวน์โหลดโมเดลภาษา...',
@@ -196,7 +197,8 @@ class AppTranslations {
       // Dialogs
       'model_prepare_failed': 'Model preparation failed: ',
       'model_pick_failed': 'Error selecting file: ',
-      'model_connecting': 'Connecting to server to download AI model (398 MB)...',
+      'upgrade_to_qwen_btn': '✨ Upgrade to Qwen 1.5B (Recommended - Much smarter)',
+      'model_connecting': 'Connecting to server to download AI model (1.04 GB)...',
       'model_copying_dev': 'Dev model file detected. Copying file to application support directory...',
       'model_copying_progress': 'Copying model...',
       'model_downloading_progress': 'Downloading language model...',

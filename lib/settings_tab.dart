@@ -387,6 +387,23 @@ class SettingsTab extends StatelessWidget {
                                   : state._textColorSecondary
                             ),
                           ),
+                          if (state._ggufModelPath.isNotEmpty && state._ggufModelPath.contains('smollm2')) ...[
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: state._isModelLoading || state._isDownloading 
+                                  ? null 
+                                  : state._upgradeToQwenModel,
+                              child: Text(
+                                AppTranslations.translate('upgrade_to_qwen_btn', state._displayLanguage),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  decoration: TextDecoration.underline,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       if (!state._isDownloading)

@@ -323,6 +323,13 @@ class DictionaryTab extends StatelessWidget {
   void _removeIgnoreWord(String word) {
     state.updateState(() {
       state._ignoredWords.remove(word);
+      final lowerWord = word.trim().toLowerCase();
+      if (AutocorrectEngine.userEnWords.contains(lowerWord)) {
+        AutocorrectEngine.userEnWords.remove(lowerWord);
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setStringList('userEnWords', AutocorrectEngine.userEnWords.toList());
+        });
+      }
     });
     state._saveSetting('ignoredWords', state._ignoredWords);
   }
