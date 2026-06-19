@@ -59,6 +59,10 @@ class ThaiMapper implements LanguageMapper {
     if (RegExp(r'[ิีึืั็ํุู][ิีึืั็ํุู]').hasMatch(text)) return false;
     if (RegExp(r'[่้๊๋์][่้๊๋์]').hasMatch(text)) return false;
     
+    // ไม้ยมก (ๆ) ห้ามอยู่ตำแหน่งแรก และห้ามอยู่กึ่งกลางคำเดี่ยว
+    if (text.startsWith('ๆ')) return false;
+    if (text.contains('ๆ') && !text.endsWith('ๆ')) return false;
+
     final firstChar = text[0];
     if (RegExp(r'[ิีึืั็ํุู่้๊๋์]').hasMatch(firstChar)) return false;
 
@@ -85,6 +89,10 @@ class ThaiMapper implements LanguageMapper {
   @override
   bool isValidPatternStrict(String thText, String originalEnText) {
     if (thText.isEmpty || thText.length < 3) return false;
+
+    // ไม้ยมก (ๆ) ห้ามอยู่ตำแหน่งแรก และห้ามอยู่กึ่งกลางคำเดี่ยว
+    if (thText.startsWith('ๆ')) return false;
+    if (thText.contains('ๆ') && !thText.endsWith('ๆ')) return false;
 
     // ต้องมีเฉพาะตัวอักษรไทย/วรรณยุกต์
     if (!RegExp(r'^[ก-์\d]+$').hasMatch(thText)) return false;
@@ -161,7 +169,11 @@ class ThaiMapper implements LanguageMapper {
     // ตรวจสอบคู่สะกดท้ายคำที่ผิดธรรมชาติ (เช่น สะกดคู่ที่ลงท้ายด้วย ส, ศ, ษ, หรือพยัญชนะสะกดคู่อื่นๆ ที่ไม่มีอยู่จริงในภาษาไทยท้ายคำ)
     if (thText.length >= 3) {
       final lastTwo = thText.substring(thText.length - 2);
-      const invalidEndings = {'นส', 'ฟส', 'ทส', 'ปส', 'มส', 'กส', 'พส', 'ดส'};
+      const invalidEndings = {
+        'นส', 'ฟส', 'ทส', 'ปส', 'มส', 'กส', 'พส', 'ดส',
+        'อซ', 'นซ', 'ดซ', 'กซ', 'มซ', 'ฟซ', 'ทซ', 'ปซ',
+        'อฝ', 'นฝ', 'ดฝ', 'กฝ', 'มฝ', 'ฟฝ', 'ทฝ', 'ปฝ'
+      };
       if (invalidEndings.contains(lastTwo)) {
         return false;
       }
@@ -172,8 +184,10 @@ class ThaiMapper implements LanguageMapper {
       return false;
     }
 
-    // คำที่ยาวตั้งแต่ 5 ตัวอักษรขึ้นไป ต้องมีสระหรือวรรณยุกต์อย่างน้อย 1 ตัว
-    if (thText.length >= 5 && !RegExp(r'[เแโใไิีึืั็ํุูะาำ่้๊๋์]').hasMatch(thText)) {
+    // คำที่ยาวตั้งแต่ 5 ตัวอักษรขึ้นไป ต้องมีสระหรือวรรณยุกต์อย่างน้อย 1 ตัว (ยกเว้นคำที่มีพยัญชนะกึ่งสระ อ, ร, ว, ย)
+    if (thText.length >= 5 && 
+        !RegExp(r'[เแโใไิีึืั็ํุูะาำ่้๊๋์]').hasMatch(thText) &&
+        !RegExp(r'[อรวย]').hasMatch(thText)) {
       return false;
     }
 

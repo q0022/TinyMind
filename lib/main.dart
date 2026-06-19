@@ -158,7 +158,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _useCustomHotkey = false;
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.6';
+  static const String currentVersion = '1.0.7';
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
@@ -229,6 +229,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   int _aiRequests = 0;
   int _savedChars = 0;
   int _hotkeyCount = 0;
+
+  bool _showTodayStatsOnly = true;
+  int _todayWordsCorrected = 0;
+  int _todayLayoutFixed = 0;
+  int _todayAiRequests = 0;
+  int _todaySavedChars = 0;
+  int _todayHotkeyCount = 0;
 
   // ตัวแปร UI & Buffer
   String _currentBuffer = '';
@@ -525,6 +532,29 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _savedChars = prefs.getInt('savedChars') ?? 0;
       _hotkeyCount = prefs.getInt('hotkeyCount') ?? 0;
 
+      String todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      String savedDate = prefs.getString('statsDate') ?? '';
+      if (savedDate != todayStr) {
+        prefs.setString('statsDate', todayStr);
+        prefs.setInt('wordsCorrected_$todayStr', 0);
+        prefs.setInt('layoutFixed_$todayStr', 0);
+        prefs.setInt('aiRequests_$todayStr', 0);
+        prefs.setInt('savedChars_$todayStr', 0);
+        prefs.setInt('hotkeyCount_$todayStr', 0);
+        
+        _todayWordsCorrected = 0;
+        _todayLayoutFixed = 0;
+        _todayAiRequests = 0;
+        _todaySavedChars = 0;
+        _todayHotkeyCount = 0;
+      } else {
+        _todayWordsCorrected = prefs.getInt('wordsCorrected_$todayStr') ?? 0;
+        _todayLayoutFixed = prefs.getInt('layoutFixed_$todayStr') ?? 0;
+        _todayAiRequests = prefs.getInt('aiRequests_$todayStr') ?? 0;
+        _todaySavedChars = prefs.getInt('savedChars_$todayStr') ?? 0;
+        _todayHotkeyCount = prefs.getInt('hotkeyCount_$todayStr') ?? 0;
+      }
+
       // โหลดคำข้าม
       _ignoredWords = prefs.getStringList('ignoredWords') ?? [];
 
@@ -607,6 +637,72 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   Future<void> _saveHistory() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('recentCorrections', jsonEncode(_recentCorrections));
+  }
+
+  void _checkAndResetDailyStats() {
+    String todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    SharedPreferences.getInstance().then((prefs) {
+      String savedDate = prefs.getString('statsDate') ?? '';
+      if (savedDate != todayStr) {
+        setState(() {
+          _todayWordsCorrected = 0;
+          _todayLayoutFixed = 0;
+          _todayAiRequests = 0;
+          _todaySavedChars = 0;
+          _todayHotkeyCount = 0;
+        });
+        prefs.setString('statsDate', todayStr);
+        prefs.setInt('wordsCorrected_$todayStr', 0);
+        prefs.setInt('layoutFixed_$todayStr', 0);
+        prefs.setInt('aiRequests_$todayStr', 0);
+        prefs.setInt('savedChars_$todayStr', 0);
+        prefs.setInt('hotkeyCount_$todayStr', 0);
+      }
+    });
+  }
+
+  void _incrementStat(String baseKey, {int value = 1}) {
+    _checkAndResetDailyStats();
+    String todayStr = DateTime.now().toIso8601String().substring(0, 10);
+    
+    setState(() {
+      if (baseKey == 'wordsCorrected') {
+        _wordsCorrected += value;
+        _todayWordsCorrected += value;
+      } else if (baseKey == 'layoutFixed') {
+        _layoutFixed += value;
+        _todayLayoutFixed += value;
+      } else if (baseKey == 'aiRequests') {
+        _aiRequests += value;
+        _todayAiRequests += value;
+      } else if (baseKey == 'savedChars') {
+        _savedChars += value;
+        _todaySavedChars += value;
+      } else if (baseKey == 'hotkeyCount') {
+        _hotkeyCount += value;
+        _todayHotkeyCount += value;
+      }
+    });
+
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('statsDate', todayStr);
+      if (baseKey == 'wordsCorrected') {
+        prefs.setInt('wordsCorrected', _wordsCorrected);
+        prefs.setInt('wordsCorrected_$todayStr', _todayWordsCorrected);
+      } else if (baseKey == 'layoutFixed') {
+        prefs.setInt('layoutFixed', _layoutFixed);
+        prefs.setInt('layoutFixed_$todayStr', _todayLayoutFixed);
+      } else if (baseKey == 'aiRequests') {
+        prefs.setInt('aiRequests', _aiRequests);
+        prefs.setInt('aiRequests_$todayStr', _todayAiRequests);
+      } else if (baseKey == 'savedChars') {
+        prefs.setInt('savedChars', _savedChars);
+        prefs.setInt('savedChars_$todayStr', _todaySavedChars);
+      } else if (baseKey == 'hotkeyCount') {
+        prefs.setInt('hotkeyCount', _hotkeyCount);
+        prefs.setInt('hotkeyCount_$todayStr', _todayHotkeyCount);
+      }
+    });
   }
 
   // ตรวจสอบสิทธิ์การเข้าถึง (Accessibility)
@@ -1094,11 +1190,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _lastReplacementEndingChar = '';
     _canUndo = true;
 
+    final int savedCharsDiff = (result.correctedWord.length - trimmedWord.length).abs();
+    _incrementStat('wordsCorrected');
+    _incrementStat('layoutFixed');
+    if (savedCharsDiff > 0) {
+      _incrementStat('savedChars', value: savedCharsDiff);
+    }
+
     setState(() {
-      _wordsCorrected++;
-      _layoutFixed++;
-      _savedChars += (result.correctedWord.length - trimmedWord.length).abs();
-      
       _recentCorrections.insert(0, {
         'original': trimmedWord,
         'corrected': result.correctedWord,
@@ -1115,9 +1214,6 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _continuousSwitchStopped = true; // สิ้นสุดการตรวจต่อเนื่องคำนี้ทันที
     _syncBufferStatus();
 
-    _saveSetting('wordsCorrected', _wordsCorrected);
-    _saveSetting('layoutFixed', _layoutFixed);
-    _saveSetting('savedChars', _savedChars);
     _saveHistory();
   }
 
@@ -1224,11 +1320,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _isLayoutDecidedForCurrentWord = true; // ล็อกเพื่อไม่เช็คซ้ำจนกว่าจะเว้นวรรก
 
     // อัปเดตสถิติ
+    final int savedCharsDiff = (corrected.length - trimmedWord.length).abs();
+    _incrementStat('wordsCorrected');
+    _incrementStat('layoutFixed');
+    if (savedCharsDiff > 0) {
+      _incrementStat('savedChars', value: savedCharsDiff);
+    }
+
     setState(() {
-      _wordsCorrected++;
-      _layoutFixed++;
-      _savedChars += (corrected.length - trimmedWord.length).abs();
-      
       // เพิ่มในรายการประวัติล่าสุด
       _recentCorrections.insert(0, {
         'original': trimmedWord,
@@ -1241,10 +1340,6 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       }
     });
 
-    // บันทึกสถิติลง DB
-    _saveSetting('wordsCorrected', _wordsCorrected);
-    _saveSetting('layoutFixed', _layoutFixed);
-    _saveSetting('savedChars', _savedChars);
     _saveHistory();
   }
 
@@ -1261,10 +1356,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         'text': replacement,
       });
 
-      setState(() {
-        _wordsCorrected++;
-        _savedChars += (replacement.length - word.length - endingChar.length).abs();
+      final int savedCharsDiff = (replacement.length - word.length - endingChar.length).abs();
+      _incrementStat('wordsCorrected');
+      if (savedCharsDiff > 0) {
+        _incrementStat('savedChars', value: savedCharsDiff);
+      }
 
+      setState(() {
         _recentCorrections.insert(0, {
           'original': word,
           'corrected': _textShortcuts[shortcutKey]!,
@@ -1286,8 +1384,6 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
       _currentBuffer = replacement;
       _isLayoutDecidedForCurrentWord = true;
-      _saveSetting('wordsCorrected', _wordsCorrected);
-      _saveSetting('savedChars', _savedChars);
       _saveHistory();
       return;
     }
@@ -1356,10 +1452,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           _applyWordCorrection(word, endingChar, aiCorrected, dummyResult);
           
           // อัปเดตสถิติจำนวน AI requests
-          setState(() {
-            _aiRequests++;
-          });
-          _saveSetting('aiRequests', _aiRequests);
+          _incrementStat('aiRequests');
         }
       }
     }
@@ -1367,10 +1460,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   // จัดการคีย์ลัดสำหรับแปลงภาษากลับ/สลับภาษาเอง (Hotkey Manual Fix & Undo)
   void _handleHotkey() {
-    setState(() {
-      _hotkeyCount++;
-    });
-    _saveSetting('hotkeyCount', _hotkeyCount);
+    _incrementStat('hotkeyCount');
     AppLogger.log("Dart: _handleHotkey received. _canUndo=$_canUndo, _currentBuffer='$_currentBuffer'. Total hotkey triggers: $_hotkeyCount");
     _isLayoutDecidedForCurrentWord = true; // ล็อกสถานะเพื่อประหยัด CPU และลดความขัดแย้ง
     _continuousSwitchStopped = true; // สิ้นสุดการตรวจต่อเนื่องคำนี้ทันที (หลักการข้อ 1)
@@ -1529,10 +1619,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   // ประมวลผลแก้ระดับประโยค (Context AI - Ollama API)
   Future<void> _processSentenceCorrection(String sentence) async {
-    setState(() {
-      _aiRequests++;
-    });
-    _saveSetting('aiRequests', _aiRequests);
+    _incrementStat('aiRequests');
 
     final String? corrected = await AutocorrectEngine.checkAndCorrectAI(sentence);
     if (corrected != null && corrected != sentence) {
@@ -1543,10 +1630,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         'text': corrected,
       });
 
-      setState(() {
-        _wordsCorrected++;
-        _savedChars += (corrected.length - sentence.length).abs();
+      final int savedCharsDiff = (corrected.length - sentence.length).abs();
+      _incrementStat('wordsCorrected');
+      if (savedCharsDiff > 0) {
+        _incrementStat('savedChars', value: savedCharsDiff);
+      }
 
+      setState(() {
         _recentCorrections.insert(0, {
           'original': sentence,
           'corrected': corrected,
@@ -1558,8 +1648,6 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         }
       });
 
-      _saveSetting('wordsCorrected', _wordsCorrected);
-      _saveSetting('savedChars', _savedChars);
       _saveHistory();
       
       // เคลียร์บัฟเฟอร์ประโยคหลังแก้ไขเสร็จ

@@ -352,8 +352,8 @@ class AutocorrectEngine {
     bool matchesBypass = false;
 
     // 1. ถ้ามีสัญลักษณ์โปรแกรมมิ่ง/ระบบ/พาธ/ลิงก์ (ยกเว้น . , - และเครื่องหมายวรรคตอนทั่วไป)
-    // สัญลักษณ์ที่จะข้าม: / \ @ ~ _ = + * ^ % $ # & | < > [ ] { } `
-    final codeSymbolRegExp = RegExp(r'[/\@~_=\+\*\^%\$#&|<>\\[\]{}`]');
+    // สัญลักษณ์ที่จะข้าม: / \ @ ~ _ = + * ^ % $ # & | < > [ ] { } ` :
+    final codeSymbolRegExp = RegExp(r'[/\@~_=\+\*\^%\$#&|<>\\[\]{}`:]');
     if (codeSymbolRegExp.hasMatch(word)) {
       matchesBypass = true;
     }
@@ -533,6 +533,11 @@ class AutocorrectEngine {
 
   // วิเคราะห์คำที่สลับแป้นทั้ง 2 ภาษา และให้ AI ระบุว่าคำไหนถูกต้องตามพจนานุกรม
   static Future<String?> identifyCorrectWordAI(String wordEn, String wordTh) async {
+    // 0. ป้องกันการแปลงหากคำใดคำหนึ่งเป็นโค้ด พาธ อีเมล หรือสัญลักษณ์ระบบ
+    if (_isCodeOrSymbol(wordEn) || _isCodeOrSymbol(wordTh)) {
+      return null;
+    }
+
     final String lowerEn = wordEn.toLowerCase();
     
     // 1. ตรวจสอบความถูกต้องของคำอังกฤษ (Heuristics)
@@ -544,8 +549,8 @@ class AutocorrectEngine {
       if (RegExp(r'\d').hasMatch(lowerEn) && !RegExp(r'^\d+$').hasMatch(lowerEn)) {
         isEnValid = false;
       }
-      // 1.2 ห้ามมีเครื่องหมายวรรคตอนหรือสัญลักษณ์ปนในคำอังกฤษ (เช่น ; , . - _ @)
-      if (RegExp(r'[;,\.\-\_@#\$%\^&\*\(\)\[\]\{\}<>\\/|`~+=]').hasMatch(lowerEn)) {
+      // 1.2 ห้ามมีเครื่องหมายวรรคตอนหรือสัญลักษณ์ปนในคำอังกฤษ (เช่น ; , . - _ @ :)
+      if (RegExp(r'[;,\.\-\_@#\$%\^&\*\(\)\[\]\{\}<>\\/|`~+=:]').hasMatch(lowerEn)) {
         isEnValid = false;
       }
       // 1.3 ถ้าคำยาวตั้งแต่ 3 ตัวอักษรขึ้นไป ต้องมีสระภาษาอังกฤษอย่างน้อย 1 ตัว
@@ -557,11 +562,11 @@ class AutocorrectEngine {
       }
     }
 
-    // 2. ตรวจสอบความถูกต้องของคำไทย
+    // 2. ตรวจสอบความถูกต้องของคำไทย (ใช้เกณฑ์เข้มงวดเพื่อความปลอดภัยสูงสุดในการคัดกรอง)
     bool isThValid = false;
     final thMapper = _mappers.firstWhere((m) => m.languageCode == 'th');
     if (wordTh.isNotEmpty) {
-      isThValid = thMapper.isValidPattern(wordTh);
+      isThValid = thMapper.isValidPatternStrict(wordTh, wordEn);
     }
 
     // 3. กรองด้วยระบบ Heuristics 3 ชั้น เพื่อความรวดเร็วและปลอดภัยก่อนเรียก AI

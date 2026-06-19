@@ -56,5 +56,17 @@ void main() {
     AutocorrectEngine.identifyCorrectWordAI('code', 'แเนำ').then((res) {
       expect(res, equals('code'));
     });
+
+    // 6. Test code bypass cases (:wq and =njv:) and Mai Yamok rules
+    AutocorrectEngine.identifyCorrectWordAI(':wq', 'ซไๆ').then((res) {
+      expect(res, isNull);
+    });
+    AutocorrectEngine.identifyCorrectWordAI('=njv:', 'ชื่นอซ').then((res) {
+      expect(res, isNull);
+    });
+
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ๆเด็ก'), isFalse);
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('เดๆ็ก'), isFalse);
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('เด็กๆ'), isTrue);
   });
 }

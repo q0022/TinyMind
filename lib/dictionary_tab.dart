@@ -135,7 +135,32 @@ class DictionaryTab extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          // แถบข้อมูลสรุปและปุ่มล้างคลังประวัติ
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "${AppTranslations.translate('ignored_count_label', state._displayLanguage)}: ${state._ignoredWords.length}",
+                style: TextStyle(fontSize: 12, color: state._textColorSecondary),
+              ),
+              if (state._ignoredWords.isNotEmpty || AutocorrectEngine.userEnWords.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _clearPersonalDictionary(context),
+                  icon: const Icon(Icons.delete_sweep_rounded, size: 16, color: Colors.redAccent),
+                  label: Text(
+                    AppTranslations.translate('dict_clear_all_btn', state._displayLanguage),
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
           // รายชื่อคำละเว้น
           Expanded(
             child: Container(
@@ -352,5 +377,54 @@ class DictionaryTab extends StatelessWidget {
       state._textShortcuts.remove(key);
     });
     state._saveShortcuts();
+  }
+
+  // ล้างข้อมูลพจนานุกรมส่วนตัว (Ignore List และคลัง AI) ทั้งหมด
+  void _clearPersonalDictionary(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(AppTranslations.translate('clear_dict_confirm_title', state._displayLanguage)),
+          content: Text(AppTranslations.translate('clear_dict_confirm_desc', state._displayLanguage)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(AppTranslations.translate('cancel', state._displayLanguage)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                
+                state.updateState(() {
+                  state._ignoredWords.clear();
+                  AutocorrectEngine.userEnWords.clear();
+                });
+                
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setStringList('ignoredWords', []);
+                await prefs.setStringList('userEnWords', []);
+                
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(AppTranslations.translate('clear_dict_success', state._displayLanguage)),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              child: Text(AppTranslations.translate('confirm', state._displayLanguage)),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

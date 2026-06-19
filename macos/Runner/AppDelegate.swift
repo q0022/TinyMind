@@ -361,7 +361,6 @@ class AppDelegate: FlutterAppDelegate {
         }
         return event
     }
-    
     func replaceText(backspaces: Int, text: String) {
         // Detect language to switch layout
         let hasThai = text.unicodeScalars.contains { $0.value >= 0x0E00 && $0.value <= 0x0E7F }

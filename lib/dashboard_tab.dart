@@ -13,29 +13,66 @@ class DashboardTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          AppTranslations.translate('performance_title', state._displayLanguage),
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          AppTranslations.translate('performance_subtitle', state._displayLanguage),
-          style: TextStyle(fontSize: 12, color: state._textColorSecondary),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppTranslations.translate('performance_title', state._displayLanguage),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  AppTranslations.translate('performance_subtitle', state._displayLanguage),
+                  style: TextStyle(fontSize: 12, color: state._textColorSecondary),
+                ),
+              ],
+            ),
+            _buildViewToggle(),
+          ],
         ),
         const SizedBox(height: 20),
         
         // Grid สถิติ
         Row(
           children: [
-            _buildStatCard(AppTranslations.translate('stat_words_corrected', state._displayLanguage), "${state._wordsCorrected}", Icons.spellcheck, Colors.indigoAccent),
+            _buildStatCard(
+              AppTranslations.translate('stat_words_corrected', state._displayLanguage),
+              "${state._showTodayStatsOnly ? state._todayWordsCorrected : state._wordsCorrected}",
+              Icons.spellcheck,
+              Colors.indigoAccent,
+            ),
             const SizedBox(width: 16),
-            _buildStatCard(AppTranslations.translate('stat_layout_fixed', state._displayLanguage), "${state._layoutFixed}", Icons.keyboard_alt_outlined, Colors.cyan),
+            _buildStatCard(
+              AppTranslations.translate('stat_layout_fixed', state._displayLanguage),
+              "${state._showTodayStatsOnly ? state._todayLayoutFixed : state._layoutFixed}",
+              Icons.keyboard_alt_outlined,
+              Colors.cyan,
+            ),
             const SizedBox(width: 16),
-            _buildStatCard(AppTranslations.translate('stat_ai_requests', state._displayLanguage), "${state._aiRequests}", Icons.psychology, Colors.purpleAccent),
+            _buildStatCard(
+              AppTranslations.translate('stat_ai_requests', state._displayLanguage),
+              "${state._showTodayStatsOnly ? state._todayAiRequests : state._aiRequests}",
+              Icons.psychology,
+              Colors.purpleAccent,
+            ),
             const SizedBox(width: 16),
-            _buildStatCard(AppTranslations.translate('stat_saved_chars', state._displayLanguage), "${state._savedChars}", Icons.electric_bolt, Colors.amber),
+            _buildStatCard(
+              AppTranslations.translate('stat_saved_chars', state._displayLanguage),
+              "${state._showTodayStatsOnly ? state._todaySavedChars : state._savedChars}",
+              Icons.electric_bolt,
+              Colors.amber,
+            ),
             const SizedBox(width: 16),
-            _buildStatCard(AppTranslations.translate('stat_hotkey_used', state._displayLanguage), "${state._hotkeyCount}", Icons.keyboard_command_key, Colors.deepOrangeAccent),
+            _buildStatCard(
+              AppTranslations.translate('stat_hotkey_used', state._displayLanguage),
+              "${state._showTodayStatsOnly ? state._todayHotkeyCount : state._hotkeyCount}",
+              Icons.keyboard_command_key,
+              Colors.deepOrangeAccent,
+            ),
           ],
         ),
         
@@ -168,6 +205,86 @@ class DashboardTab extends StatelessWidget {
               style: TextStyle(fontSize: 11, color: state._textColorSecondary),
             )
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildViewToggle() {
+    final isDark = state._isDark;
+    final displayLanguage = state._displayLanguage;
+    
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.06),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleButton(
+            label: AppTranslations.translate('today', displayLanguage),
+            isSelected: state._showTodayStatsOnly,
+            onTap: () {
+              state.setState(() {
+                state._showTodayStatsOnly = true;
+              });
+            },
+          ),
+          _buildToggleButton(
+            label: AppTranslations.translate('lifetime', displayLanguage),
+            isSelected: !state._showTodayStatsOnly,
+            onTap: () {
+              state.setState(() {
+                state._showTodayStatsOnly = false;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleButton({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDark = state._isDark;
+    final primaryColor = Color(state._primaryColorValue);
+    
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  )
+                ]
+              : [],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected
+                ? Colors.white
+                : (isDark ? Colors.white70 : Colors.black54),
+          ),
         ),
       ),
     );
