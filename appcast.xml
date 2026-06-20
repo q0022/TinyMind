@@ -3,6 +3,17 @@
   <channel>
     <title>TinyMind Updates</title>
     <item>
+      <title>Version 1.0.8</title>
+      <sparkle:releaseNotesLink>https://github.com/q0022/TinyMind/releases/tag/v1.0.8</sparkle:releaseNotesLink>
+      <pubDate>Sat, 20 Jun 2026 21:03:00 +0700</pubDate>
+      <enclosure url="https://github.com/q0022/TinyMind/releases/download/v1.0.8/TinyMind-macOS.zip"
+                 sparkle:version="1.0.8"
+                 sparkle:shortVersionString="1.0.8"
+                 sparkle:edSignature="e+8PfGCPiaE4HRbqAp8WMUJkrSL/5TMaJ76co+W3jd+9mP7JiaEhbazhtAElRu4ZNQsChTeV8uv+dlYDxWcIAQ=="
+                 length="28432730"
+                 type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 1.0.5</title>
       <sparkle:releaseNotesLink>https://github.com/q0022/TinyMind/releases/tag/v1.0.5</sparkle:releaseNotesLink>
       <pubDate>Wed, 17 Jun 2026 15:32:00 +0700</pubDate>
