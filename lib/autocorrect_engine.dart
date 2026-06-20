@@ -449,6 +449,42 @@ class AutocorrectEngine {
     return true;
   }
 
+  // แปลข้อความสลับภาษา (อังกฤษ <-> ไทย) ด้วยโมเดล AI
+  static Future<String?> translateAI(String text) async {
+    if (_llama == null) {
+      AppLogger.log("TinyMind AI: Model is not loaded yet.");
+      return null;
+    }
+    try {
+      _llama!.clear();
+      final prompt = """<|im_start|>system
+คุณคือระบบแปลภาษาภาษาไทย-อังกฤษที่แม่นยำสูง (Bilingual Translator)
+แปลข้อความที่ได้รับ หากข้อความเป็นภาษาไทยให้แปลเป็นภาษาอังกฤษ หากข้อความเป็นภาษาอังกฤษให้แปลเป็นภาษาไทย
+ให้ส่งคืนเฉพาะข้อความที่แปลเสร็จแล้วเท่านั้น ห้ามอธิบาย ห้ามพ่นคำอื่นใดเพิ่มเติม และห้ามใส่เครื่องหมายคำพูด
+
+ตัวอย่าง:
+- "สวัสดี" -> "Hello"
+- "hello" -> "สวัสดี"
+- "สวยงาม" -> "Beautiful"
+<|im_end|>
+<|im_start|>user
+แปลคำนี้: "$text"<|im_end|>
+<|im_start|>assistant
+""";
+
+      _llama!.setPrompt(prompt);
+      final correctedText = await _llama!.generateCompleteText(maxTokens: 100);
+      var trimmed = correctedText.trim();
+      trimmed = trimmed.split('<|im_end|>')[0].trim();
+      trimmed = trimmed.split('<|im_start|>')[0].trim();
+      trimmed = trimmed.replaceAll(RegExp(r'^"|"$'), '');
+      return trimmed.isNotEmpty ? trimmed : null;
+    } catch (e) {
+      AppLogger.log("TinyMind AI Translation Error: $e");
+      return null;
+    }
+  }
+
   // ฟังก์ชันวิเคราะห์คำและบริบทแป้นพิมพ์โดยการสลับเลย์เอาต์ทางกายภาพ 100% สำหรับอังกฤษ และใช้ Local AI ซ่อมเฉพาะภาษาไทย
   static Future<String?> checkAndCorrectAI(String sentence) async {
     try {
