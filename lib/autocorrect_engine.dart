@@ -3,11 +3,19 @@ import 'dart:io';
 import 'package:llama_cpp_dart/llama_cpp_dart.dart';
 import 'language_mapper.dart';
 import 'thai_mapper.dart';
+import 'korean_mapper.dart';
+import 'japanese_mapper.dart';
+import 'chinese_mapper.dart';
 import 'logger.dart';
 
 class AutocorrectEngine {
-  // ทะเบียนของภาษาที่เปิดใช้งานในระบบสลับคีย์บอร์ด (เริ่มต้นเป็นภาษาไทย)
-  static final List<LanguageMapper> _mappers = [ThaiMapper()];
+  // ทะเบียนของภาษาที่เปิดใช้งานในระบบสลับคีย์บอร์ด
+  static final List<LanguageMapper> _mappers = [
+    ThaiMapper(),
+    KoreanMapper(),
+    JapaneseMapper(),
+    ChineseMapper(),
+  ];
 
   // รายชื่อคำภาษาอังกฤษยอดนิยม (เพื่อป้องกันไม่ให้แอปไปแปลงคำภาษาอังกฤษที่ถูกต้อง)
   static const Set<String> _commonEnWords = {

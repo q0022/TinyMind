@@ -241,7 +241,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   // ตัวแปร UI & Buffer
   String _currentBuffer = '';
   String _slashBuffer = '';
-  final List<SlashCommand> _slashCommands = [TranslateShortCommand(), TranslateCommand()];
+  final List<SlashCommand> _slashCommands = [];
   String _fullSentenceBuffer = '';
   Timer? _debounceTimer;
   Map<String, String>? _lastReplacement;
@@ -1271,10 +1271,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   bool _isSlashTriggerOrPrefix(String text) {
-    final trimmed = text.trim();
-    return trimmed == '/' || trimmed == 'ฝ' ||
-           trimmed == '/t' || trimmed == 'ฝะ' ||
-           trimmed == '/translate' || trimmed == 'ฝะพฟืหสฟะำ';
+    return false;
   }
 
   void _syncSlashBufferOnReplacement(String original, String replacement) {
