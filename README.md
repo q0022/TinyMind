@@ -7,6 +7,9 @@
 ## ✨ Features
 
 - **Local AI inference** – No internet required; runs entirely on your Mac’s GPU (Apple Metal).
+- **Layout-Aware Backspace Deletion** – Dynamically adjusts backspace counts using grapheme clusters (for Thai) or code points (for English) to perfectly clear original typed text without over-deleting.
+- **CJK Keyboard Layout Support** – Includes layout-swapping mappers for Korean (Dubeolsik), Japanese (JIS Kana), and Chinese (Pinyin validation) in addition to English/Thai layout correction.
+- **Modular Slash Commands** – Type `/t <text>` or `/translate <text>` to translate text instantly between English and Thai on-the-fly.
 - **Deferred buffer clearing** – Allows hot‑key‑triggered correction immediately after a space or enter.
 - **Fast, low‑memory footprint** – Efficient memory usage (~1.04 GiB of GPU VRAM for Qwen 2.5 1.5B).
 - **Easy hot‑key configuration** – Customize hot‑keys via the macOS menu bar.
@@ -46,6 +49,7 @@ Pre‑built release binaries are available as **.dmg** and **.zip** files. Downl
 
 - Type normally; the AI will suggest corrections based on the previous buffer.
 - Press your configured hot‑key (default: `⌥` + `Space`) to accept the suggestion.
+- **Translate On-The-Fly**: Type `/t <text>` or `/translate <text>` and press `Enter` to translate between English and Thai. The command prefix and text will be replaced instantly with the translated string.
 - The **deferred buffer clear** ensures that a space does **not** clear the buffer until the first character of the next word is typed, preserving hot‑key responsiveness.
 
 ---
