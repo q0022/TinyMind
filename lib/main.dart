@@ -241,7 +241,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   // ตัวแปร UI & Buffer
   String _currentBuffer = '';
   String _slashBuffer = '';
-  final List<SlashCommand> _slashCommands = [];
+  final List<SlashCommand> _slashCommands = [TranslateShortCommand(), TranslateCommand()];
   String _fullSentenceBuffer = '';
   Timer? _debounceTimer;
   Map<String, String>? _lastReplacement;
@@ -1246,8 +1246,10 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   SlashCommand? _getSlashCommand(String buffer) {
     final trimmed = buffer.trim();
-    for (final cmd in _slashCommands) {
-      if (trimmed.startsWith(cmd.trigger) || trimmed.startsWith(cmd.thaiTrigger)) {
+    final sortedCmds = List<SlashCommand>.from(_slashCommands)
+      ..sort((a, b) => b.trigger.length.compareTo(a.trigger.length));
+    for (final cmd in sortedCmds) {
+      if (trimmed.startsWith(cmd.trigger)) {
         return cmd;
       }
     }
@@ -1259,8 +1261,6 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     String triggerUsed = '';
     if (trimmed.startsWith(cmd.trigger)) {
       triggerUsed = cmd.trigger;
-    } else if (trimmed.startsWith(cmd.thaiTrigger)) {
-      triggerUsed = cmd.thaiTrigger;
     }
     if (triggerUsed.isEmpty) return '';
     var arg = trimmed.substring(triggerUsed.length);
@@ -1271,7 +1271,10 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   bool _isSlashTriggerOrPrefix(String text) {
-    return false;
+    final trimmed = text.trim();
+    return trimmed == '/' ||
+           trimmed == '/t' ||
+           trimmed == '/translate';
   }
 
   void _syncSlashBufferOnReplacement(String original, String replacement) {
@@ -1308,7 +1311,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       final result = await cmd.execute(argument);
       AppLogger.log("Dart: slash command result: '$result'");
       
-      final int backspaces = _calculateBackspaces(_slashBuffer, result ?? '');
+      final int backspaces = _slashBuffer.length;
       
       _platform.invokeMethod('replaceText', {
         'backspaces': backspaces,
