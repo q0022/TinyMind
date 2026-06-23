@@ -1293,8 +1293,20 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   int _calculateBackspaces(String textToDelete, String replacementText) {
-    final bool isToThai = RegExp(r'[ก-์]').hasMatch(replacementText);
-    return isToThai ? textToDelete.characters.length : textToDelete.length;
+    int backspaces = 0;
+    final combiningMarks = RegExp(r'[ิีึืุูั็่้๊๋์ํฺ]');
+    final thaiConsonantsAndMarks = RegExp(r'[ก-ฮิีึืุูั็่้๊๋์ํฺ]');
+    
+    for (int i = 0; i < textToDelete.length; i++) {
+      final char = textToDelete[i];
+      if (i > 0 && 
+          combiningMarks.hasMatch(char) && 
+          thaiConsonantsAndMarks.hasMatch(textToDelete[i - 1])) {
+        continue;
+      }
+      backspaces++;
+    }
+    return backspaces;
   }
 
   SlashCommand? _getSlashCommand(String buffer) {
