@@ -158,8 +158,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   String _hotkeyKey = 'Backspace';
   bool _useCustomHotkey = false;
 
+  bool _useOSKeyboards = true;
+  bool _useSlashCommands = true;
+  bool _isKoreanEnabled = false;
+  bool _isJapaneseEnabled = false;
+  bool _isChineseEnabled = false;
+
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.7';
+  static const String currentVersion = '1.0.11';
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
@@ -301,6 +307,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         _checkAccessibilityPermission();
       }
     });
+
+    // ตรวจจับคีย์บอร์ดที่ติดตั้งในเครื่องทุก 10 วินาที
+    Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted) {
+        _updateActiveKeyboards();
+      }
+    });
   }
 
   Future<void> _initAutoUpdater() async {
@@ -317,6 +330,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   Future<void> _initApp() async {
     await _loadSettings();
+    await _updateActiveKeyboards();
     await _initSystemTray();
     await _checkAccessibilityPermission();
     _initAutoUpdater();
@@ -578,6 +592,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _hotkeyModifier = prefs.getString('hotkeyModifier') ?? 'Shift';
       _hotkeyKey = prefs.getString('hotkeyKey') ?? 'Backspace';
       _useCustomHotkey = prefs.getBool('useCustomHotkey') ?? false;
+      _useOSKeyboards = prefs.getBool('useOSKeyboards') ?? true;
+      _useSlashCommands = prefs.getBool('useSlashCommands') ?? true;
+      _isKoreanEnabled = prefs.getBool('isKoreanEnabled') ?? false;
+      _isJapaneseEnabled = prefs.getBool('isJapaneseEnabled') ?? false;
+      _isChineseEnabled = prefs.getBool('isChineseEnabled') ?? false;
 
       // โหลดธีม
       _isDarkMode = prefs.getBool('isDarkMode') ?? true;
@@ -606,6 +625,31 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _initLocalLlama(_ggufModelPath);
     }
     _updateSystemTrayMenu();
+  }
+
+  // อัปเดตผังแป้นพิมพ์ที่เปิดใช้งานจากฝั่ง macOS
+  Future<void> _updateActiveKeyboards() async {
+    if (_useOSKeyboards) {
+      try {
+        final List<dynamic>? result = await _platform.invokeMethod('getEnabledLanguages');
+        if (result != null) {
+          final List<String> osLangs = result.map((e) => e.toString().toLowerCase()).toList();
+          AppLogger.log("Dart: OS Enabled Languages: $osLangs");
+          setState(() {
+            _isKoreanEnabled = osLangs.contains('ko');
+            _isJapaneseEnabled = osLangs.contains('ja') || osLangs.contains('jp');
+            _isChineseEnabled = osLangs.contains('zh') || osLangs.contains('ch');
+          });
+        }
+      } catch (e) {
+        AppLogger.log("Dart: Failed to query OS enabled languages: $e");
+      }
+    }
+
+    // ซิงค์การตั้งค่าไปยัง AutocorrectEngine
+    AutocorrectEngine.isKoreanEnabled = _isKoreanEnabled;
+    AutocorrectEngine.isJapaneseEnabled = _isJapaneseEnabled;
+    AutocorrectEngine.isChineseEnabled = _isChineseEnabled;
   }
 
   // ส่งข้อมูล Hotkey ไปยัง Native
@@ -1036,6 +1080,15 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   void _handleKeyPress(String char) {
     AppLogger.log("Dart: _handleKeyPress received: '$char'");
+
+    // หากยอมรับคำแนะนำสะกดคือก่อนหน้านี้ (ไม่ได้กดสลับกลับ) ให้เอาคำนั้นใส่ Dictionary อัตโนมัติ
+    if (_canUndo && _lastReplacement != null) {
+      final corrected = _lastReplacement!['corrected']!;
+      final trimmed = corrected.trim();
+      final pureWord = trimmed.replaceAll(RegExp(r'[.,!?;:\-_()\[\]{}]+$'), '');
+      _addWordToIgnoreList(pureWord);
+    }
+
     _canUndo = false; // Invalidate undo on keypress
 
     // Sync to _slashBuffer
@@ -1245,11 +1298,12 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   SlashCommand? _getSlashCommand(String buffer) {
+    if (!_useSlashCommands) return null;
     final trimmed = buffer.trim();
     final sortedCmds = List<SlashCommand>.from(_slashCommands)
       ..sort((a, b) => b.trigger.length.compareTo(a.trigger.length));
     for (final cmd in sortedCmds) {
-      if (trimmed.startsWith(cmd.trigger)) {
+      if (trimmed == cmd.trigger || trimmed.startsWith(cmd.trigger + ' ')) {
         return cmd;
       }
     }
@@ -1259,7 +1313,9 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   String _getSlashArgument(String buffer, SlashCommand cmd) {
     final trimmed = buffer.trim();
     String triggerUsed = '';
-    if (trimmed.startsWith(cmd.trigger)) {
+    if (trimmed == cmd.trigger) {
+      triggerUsed = cmd.trigger;
+    } else if (trimmed.startsWith(cmd.trigger + ' ')) {
       triggerUsed = cmd.trigger;
     }
     if (triggerUsed.isEmpty) return '';
@@ -1271,6 +1327,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   bool _isSlashTriggerOrPrefix(String text) {
+    if (!_useSlashCommands) return false;
     final trimmed = text.trim();
     return trimmed == '/' ||
            trimmed == '/t' ||
@@ -1511,6 +1568,10 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     } else {
       // 2. ถ้า Local ไม่พบคำศัพท์ และเปิดสวิตช์ AI + โหลดโมเดลเสร็จแล้ว -> ส่งให้ AI ช่วยสแกน
       if (_isAiCorrection && AutocorrectEngine.isModelLoaded) {
+        if (AutocorrectEngine.isCodeOrSymbol(trimmedWord)) {
+          AppLogger.log("Dart: _processWordCorrection: word '$trimmedWord' is code/symbol. Skipping AI fallback.");
+          return;
+        }
         // กรองคำที่พิมพ์ถูกต้องตามเลย์เอาต์ปัจจุบันอยู่แล้ว เพื่อหลีกเลี่ยงการหน่วงเวลาเรียก AI
         if (AutocorrectEngine.isLikelyCorrectInCurrentLayout(trimmedWord)) {
           AppLogger.log("Dart: _processWordCorrection: word '$trimmedWord' is likely correct in current layout. Skipping AI fallback.");
