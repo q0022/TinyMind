@@ -33,6 +33,11 @@ class ThaiMapper implements LanguageMapper {
     'จ้า', 'อิอิ', '555', '5555', '55555',
   };
 
+  static const Set<String> _validMuanWords = {
+    'ใหญ่', 'ใหม่', 'ให้', 'ใภ้', 'ใช้', 'ใฝ่', 'ใจ', 'ใส่', 'ใหล', 'ใคร',
+    'ใคร่', 'ใบ', 'ใส', 'ใด', 'ใน', 'ใช่', 'ใต้', 'ใกล้', 'ใบ้', 'ใย'
+  };
+
   @override
   String convertToTarget(String input) {
     final sb = StringBuffer();
@@ -40,7 +45,50 @@ class ThaiMapper implements LanguageMapper {
       final char = input[i];
       sb.write(_enToThMap[char] ?? char);
     }
-    return sb.toString();
+    
+    final converted = sb.toString();
+    final resultSb = StringBuffer();
+    for (int i = 0; i < converted.length; i++) {
+      if (converted[i] == 'ใ') {
+        final sub = converted.substring(i);
+        bool isValid = false;
+        for (final word in _validMuanWords) {
+          if (sub.startsWith(word)) {
+            isValid = true;
+            break;
+          }
+        }
+        if (isValid) {
+          resultSb.write('ใ');
+        } else {
+          resultSb.write('.');
+        }
+      } else {
+        resultSb.write(converted[i]);
+      }
+    }
+    
+    // แปลงตัวอักษรที่เป็นสระหรือสัญลักษณ์ไทยที่อยู่หลังจุด '.' กลับเป็นตัวเลขดั้งเดิม
+    final finalStr = resultSb.toString();
+    final finalSb = StringBuffer();
+    const vowelDigits = {
+      'ๅ': '1',
+      '/': '2',
+      '-': '3',
+      'ุ': '6',
+      'ึ': '7',
+    };
+    
+    for (int i = 0; i < finalStr.length; i++) {
+      final char = finalStr[i];
+      if (i > 0 && finalStr[i - 1] == '.' && vowelDigits.containsKey(char)) {
+        finalSb.write(vowelDigits[char]!);
+      } else {
+        finalSb.write(char);
+      }
+    }
+    
+    return finalSb.toString();
   }
 
   @override
@@ -94,8 +142,9 @@ class ThaiMapper implements LanguageMapper {
     if (thText.startsWith('ๆ')) return false;
     if (thText.contains('ๆ') && !thText.endsWith('ๆ')) return false;
 
-    // ต้องมีเฉพาะตัวอักษรไทย/วรรณยุกต์
-    if (!RegExp(r'^[ก-์\d]+$').hasMatch(thText)) return false;
+    // ต้องมีเฉพาะตัวอักษรไทย วรรณยุกต์ ตัวเลข และจุด (โดยจุดต้องไม่อยู่ตำแหน่งแรก)
+    if (!RegExp(r'^[ก-์\d.]+$').hasMatch(thText)) return false;
+    if (thText.startsWith('.')) return false;
 
     // ตัวลากข้าง (ๅ) ต้องตามหลัง ฤ หรือ ฦ เท่านั้น
     if (thText.contains('ๅ')) {
@@ -119,6 +168,8 @@ class ThaiMapper implements LanguageMapper {
     if (RegExp(r'[ิีึืั็ํุู][ิีึืั็ํุู]').hasMatch(thText)) return false;
     if (RegExp(r'[่้๊๋์][่้๊๋์]').hasMatch(thText)) return false;
     if (RegExp(r'[่้๊๋์][ิีึืั็ํุู]').hasMatch(thText)) return false; // วรรณยุกต์มาก่อนสระไม่ได้
+    if (RegExp(r'[่้๊๋][ก-ฮ]ะ').hasMatch(thText)) return false; // วรรณยุกต์ห้ามอยู่ก่อนพยัญชนะที่ตามด้วยสระอะ
+    if (RegExp(r'ะ[่้๊๋]').hasMatch(thText)) return false; // สระอะห้ามตามด้วยวรรณยุกต์
 
     // สระบน/ล่างและสระท้ายคำห้ามติดกัน
     if (RegExp(r'[ิีึืั็ํุู][ะาำ]|[ะาำ][ิีึืั็ํุู]').hasMatch(thText)) return false;

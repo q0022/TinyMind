@@ -68,5 +68,76 @@ void main() {
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ๆเด็ก'), isFalse);
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('เดๆ็ก'), isFalse);
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('เด็กๆ'), isTrue);
+    // 7. Test CJK layouts disabled by default
+    AutocorrectEngine.isKoreanEnabled = false;
+    AutocorrectEngine.isJapaneseEnabled = false;
+    AutocorrectEngine.isChineseEnabled = false;
+    expect(AutocorrectEngine.checkAndCorrectLocal('v2/in'), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict('v2/in'), isNull);
+
+    // Test CJK layouts enabled
+    AutocorrectEngine.isKoreanEnabled = true;
+    // Even if enabled, v2/in has 2 and / which should be rejected by stricter Korean validation
+    expect(AutocorrectEngine.checkAndCorrectLocal('v2/in'), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict('v2/in'), isNull);
+
+    // Typing a valid Korean mapped word like 'dkssud' (which maps to Korean 'ㅇㅏㄴㄴㅕㅇ')
+    final koResult = AutocorrectEngine.checkAndCorrectLocal('dkssud');
+    expect(koResult, isNotNull);
+    expect(koResult!.correctedWord, equals('ㅇㅏㄴㄴㅕㅇ'));
+    expect(koResult.languageCode, equals('ko'));
+
+    // 8. Test code/symbol bypass for checkAndCorrectAI
+    expect(AutocorrectEngine.isCodeOrSymbol('49/1'), isTrue);
+    AutocorrectEngine.checkAndCorrectAI('49/1').then((res) {
+      expect(res, isNull);
+    });
+
+    // 9. Test Thai abbreviation with periods bypass
+    expect(AutocorrectEngine.checkAndCorrectLocal('อ.พาน'), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict('อ.พาน'), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocal('ม.1'), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict('ม.1'), isNull);
+    expect(AutocorrectEngine.isCodeOrSymbol('อ.พาน'), isFalse);
+    expect(AutocorrectEngine.isCodeOrSymbol('ม.1'), isFalse);
+
+    // 10. Test Mai Muan constraints & period layout conversion for abbreviations
+    expect(AutocorrectEngine.convertLayout('v.rko', languageCode: 'th', toTarget: true), equals('อ.พาน'));
+    expect(AutocorrectEngine.convertLayout(',.1', languageCode: 'th', toTarget: true), equals('ม.1'));
+    expect(AutocorrectEngine.convertLayout('9.sov\'dt-t', languageCode: 'th', toTarget: true), equals('ต.หนองกะขะ'));
+    expect(AutocorrectEngine.convertLayout('fu.0', languageCode: 'th', toTarget: true), equals('ดีใจ'));
+    expect(AutocorrectEngine.convertLayout('lt.4h', languageCode: 'th', toTarget: true), equals('สะใภ้'));
+
+    // 11. Test checkAndCorrectAI does not bypass English layout with periods
+    AutocorrectEngine.checkAndCorrectAI('อ.พาน').then((res) {
+      expect(res, isNull);
+    });
+
+    // 12. Test identifyCorrectWordAI chooses abbreviation over invalid English
+    AutocorrectEngine.identifyCorrectWordAI('v.rko', 'อ.พาน').then((res) {
+      expect(res, equals('อ.พาน'));
+    });
+
+    // 13. Test English layout conversion bypass validation rules
+    AutocorrectEngine.checkAndCorrectAI('เ็นภาษาไทย').then((res) {
+      expect(res, isNull);
+    });
+    AutocorrectEngine.checkAndCorrectAI('เหี้๊๊๊๊้').then((res) {
+      expect(res, isNull);
+    });
+
+    // 14. Test English words with apostrophes/hyphens bypass Thai conversion
+    expect(AutocorrectEngine.checkAndCorrectLocal("photo'"), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict("photo'"), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocal("don't"), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict("don't"), isNull);
+
+    // 15. Test isLikelyCorrectInCurrentLayout invalid Thai patterns (e.g. wrong layout English words)
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ย้นะนห้นย'), isFalse); // photoshop
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ทนะ้ำพ'), isFalse); // mother
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ใหะ้ชน'), isFalse); // github
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ค่ะ'), isTrue);
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('จ้ะ'), isTrue);
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('น่ะ'), isTrue);
   });
 }
