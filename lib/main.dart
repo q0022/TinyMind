@@ -1413,6 +1413,12 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           
           if (isValid) {
             backspaces += 1;
+            // If the cluster has a single vowel without any tone marks, macOS deletes it character by character (vowel first, then consonant)
+            final hasVowel = marks.any((m) => RegExp(r'[ิีึืุูั็ํ]').hasMatch(m));
+            final hasTone = marks.any((m) => RegExp(r'[่้๊๋์]').hasMatch(m));
+            if (hasVowel && !hasTone) {
+              backspaces += 1;
+            }
             // If the cluster contains SARA AM ('ำ'), macOS requires 2 extra backspaces
             // (1 for the consonant, 2 for the separate parts 'ํ' and 'า' of SARA AM)
             if (marks.contains('ำ')) {

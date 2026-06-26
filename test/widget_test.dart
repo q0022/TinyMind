@@ -223,6 +223,12 @@ void main() {
             
             if (isValid) {
               backspaces += 1;
+              // If the cluster has a single vowel without any tone marks, macOS deletes it character by character (vowel first, then consonant)
+              final hasVowel = marks.any((m) => RegExp(r'[ิีึืุูั็ํ]').hasMatch(m));
+              final hasTone = marks.any((m) => RegExp(r'[่้๊๋์]').hasMatch(m));
+              if (hasVowel && !hasTone) {
+                backspaces += 1;
+              }
               if (marks.contains('ำ')) {
                 backspaces += 2;
               }
@@ -251,6 +257,7 @@ void main() {
     expect(countPhysicalThaiBackspaces('ทำ'), equals(3));
     expect(countPhysicalThaiBackspaces('ย่ำ'), equals(4));
     expect(countPhysicalThaiBackspaces('อำพหณนย'), equals(8));
+    expect(countPhysicalThaiBackspaces('รืหะพีแะ'), equals(8));
   });
 }
 
