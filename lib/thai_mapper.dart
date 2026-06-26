@@ -30,7 +30,7 @@ class ThaiMapper implements LanguageMapper {
     'น้อย', 'ดี', 'ชั่ว', 'สูง', 'ต่ำ', 'ใหญ่', 'เล็ก', 'ใหม่', 'เก่า', 'เร็ว', 'ช้า', 'ก่อน', 'หลัง', 'แรก', 'สุดท้าย', 'จริง', 'เท็จ',
     'ใช่', 'ไม่ใช่', 'เข้าใจ', 'ไม่เข้าใจ', 'ขอบคุณ', 'ขอโทษ', 'ยินดี', 'ตกลง', 'ยกเลิก', 'บันทึก', 'เปิด', 'ปิด', 'สร้าง', 'ลบ',
     'เพิ่ม', 'ลด', 'ค้นหา', 'กรุณา', 'โปรด', 'ช่วย', 'หน่อย', 'นะ', 'คะ', 'ด้วยนะ', 'เขียน', 'โค้ด', 'โปรแกรม', 'คอมพิวเตอร์',
-    'จ้า', 'อิอิ', '555', '5555', '55555',
+    'ดีใจ', 'ดึก', 'ตรวจสอบ', 'ทดสอบ', 'อ.พาน', 'จ้า', 'อิอิ', '555', '5555', '55555',
   };
 
   static const Set<String> _validMuanWords = {
@@ -56,6 +56,19 @@ class ThaiMapper implements LanguageMapper {
           if (sub.startsWith(word)) {
             isValid = true;
             break;
+          }
+        }
+        if (!isValid) {
+          if (i > 0) {
+            final prevChar = resultSb.toString()[i - 1];
+            if (RegExp(r'[ะาำเแโใไิีึืั็ํุูู่้๊๋์]').hasMatch(prevChar)) {
+              isValid = true;
+            }
+          } else if (i == 0 && converted.length > 1) {
+            final nextChar = converted[i + 1];
+            if (RegExp(r'[ก-ฮ]').hasMatch(nextChar)) {
+              isValid = true;
+            }
           }
         }
         if (isValid) {
@@ -106,6 +119,10 @@ class ThaiMapper implements LanguageMapper {
     if (text.isEmpty) return false;
     if (RegExp(r'[ิีึืั็ํุู][ิีึืั็ํุู]').hasMatch(text)) return false;
     if (RegExp(r'[่้๊๋์][่้๊๋์]').hasMatch(text)) return false;
+    if (RegExp(r'[ิีึืั็ํุู][ะาำ]|[ะาำ][ิีึืั็ํุู]').hasMatch(text)) return false; // สระบน/ล่างและสระท้ายคำห้ามติดกัน
+    if (RegExp(r'[่้๊๋์][ิีึืั็ํุู]').hasMatch(text)) return false; // วรรณยุกต์มาก่อนสระไม่ได้
+    if (RegExp(r'[่้๊๋][ก-ฮ]ะ').hasMatch(text)) return false; // วรรณยุกต์ห้ามอยู่ก่อนพยัญชนะที่ตามด้วยสระอะ
+    if (RegExp(r'ะ[่้๊๋]').hasMatch(text)) return false; // สระอะห้ามตามด้วยวรรณยุกต์
     
     // ไม้ยมก (ๆ) ห้ามอยู่ตำแหน่งแรก และห้ามอยู่กึ่งกลางคำเดี่ยว
     if (text.startsWith('ๆ')) return false;
@@ -138,21 +155,31 @@ class ThaiMapper implements LanguageMapper {
   bool isValidPatternStrict(String thText, String originalEnText) {
     if (thText.isEmpty || thText.length < 3) return false;
 
-    // ไม้ยมก (ๆ) ห้ามอยู่ตำแหน่งแรก และห้ามอยู่กึ่งกลางคำเดี่ยว
+    // หากข้อความมีความยาวมาก (เช่น เกิน 9 ตัวอักษร) เราจะมองว่าเป็น "ประโยคยาว"
+    // และผ่อนปรนกฎการตรวจสอบโครงสร้างคำเดี่ยวบางข้อที่อาจทำให้เกิด false positive
+    final isSentence = thText.length > 9;
+
+    // ไม้ยมก (ๆ) ห้ามอยู่ตำแหน่งแรกสุดของข้อความ
     if (thText.startsWith('ๆ')) return false;
-    if (thText.contains('ๆ') && !thText.endsWith('ๆ')) return false;
 
     // ต้องมีเฉพาะตัวอักษรไทย วรรณยุกต์ ตัวเลข และจุด (โดยจุดต้องไม่อยู่ตำแหน่งแรก)
     if (!RegExp(r'^[ก-์\d.]+$').hasMatch(thText)) return false;
     if (thText.startsWith('.')) return false;
 
-    // ตัวลากข้าง (ๅ) ต้องตามหลัง ฤ หรือ ฦ เท่านั้น
-    if (thText.contains('ๅ')) {
-      for (int i = 0; i < thText.length; i++) {
-        if (thText[i] == 'ๅ') {
-          if (i == 0 || !(thText[i - 1] == 'ฤ' || thText[i - 1] == 'ฦ')) {
-            return false;
-          }
+    // ตรวจสอบโครงสร้างคำที่มีจุดทศนิยมหรืออักษรย่อ (.)
+    if (thText.contains('.')) {
+      final parts = thText.split('.');
+      for (int i = 0; i < parts.length - 1; i++) {
+        final part = parts[i];
+        if (i == 0) {
+          final isValidAbbrPrefix = RegExp(r'^[ก-ฮ]+$').hasMatch(part) ||
+              RegExp(r'^เ[ก-ฮ]+$').hasMatch(part) ||
+              RegExp(r'^[๐-๙\d]+$').hasMatch(part);
+          if (!isValidAbbrPrefix) return false;
+        } else {
+          final isValidAbbrPart = RegExp(r'^[ก-ฮ]+$').hasMatch(part) ||
+              RegExp(r'^[๐-๙\d]+$').hasMatch(part);
+          if (!isValidAbbrPart) return false;
         }
       }
     }
@@ -168,14 +195,14 @@ class ThaiMapper implements LanguageMapper {
     if (RegExp(r'[ิีึืั็ํุู][ิีึืั็ํุู]').hasMatch(thText)) return false;
     if (RegExp(r'[่้๊๋์][่้๊๋์]').hasMatch(thText)) return false;
     if (RegExp(r'[่้๊๋์][ิีึืั็ํุู]').hasMatch(thText)) return false; // วรรณยุกต์มาก่อนสระไม่ได้
-    if (RegExp(r'[่้๊๋][ก-ฮ]ะ').hasMatch(thText)) return false; // วรรณยุกต์ห้ามอยู่ก่อนพยัญชนะที่ตามด้วยสระอะ
+    if (!isSentence && RegExp(r'[่้๊๋][ก-ฮ]ะ').hasMatch(thText)) return false; // วรรณยุกต์ห้ามอยู่ก่อนพยัญชนะที่ตามด้วยสระอะ (เฉพาะคำเดี่ยว)
     if (RegExp(r'ะ[่้๊๋]').hasMatch(thText)) return false; // สระอะห้ามตามด้วยวรรณยุกต์
 
     // สระบน/ล่างและสระท้ายคำห้ามติดกัน
     if (RegExp(r'[ิีึืั็ํุู][ะาำ]|[ะาำ][ิีึืั็ํุู]').hasMatch(thText)) return false;
 
-    // สระท้ายคำซ้อนกันเองไม่ได้
-    if (RegExp(r'[ะาำ][ะาำ]').hasMatch(thText)) return false;
+    // สระท้ายคำซ้อนกันเองไม่ได้ (ยกเว้น "าะ" ซึ่งเป็นสระเอาะปกติ เช่น เพราะ, เฉพาะ)
+    if (RegExp(r'ะ[ะาำ]|า[าำ]|ำ[ะาำ]').hasMatch(thText)) return false;
 
     // สระหน้า (เแโใไ) ต้องมีพยัญชนะตามหลัง (ยกเว้นตัวสุดท้ายของประโยคระหว่างพิมพ์)
     for (int i = 0; i < thText.length - 1; i++) {
@@ -186,39 +213,63 @@ class ThaiMapper implements LanguageMapper {
       }
     }
 
-    // ตัวการันต์ต้องอยู่หลังพยัญชนะ
-    if (thText.endsWith('์')) {
-      if (thText.length < 2 || !RegExp(r'[ก-ฮ]').hasMatch(thText[thText.length - 2])) {
-        return false;
-      }
-    }
+    if (!isSentence) {
+      // ไม้ยมก (ๆ) ห้ามอยู่กึ่งกลางคำเดี่ยว
+      if (thText.contains('ๆ') && !thText.endsWith('ๆ')) return false;
 
-    // ตรวจสอบลำดับพยัญชนะติดต่อกัน (Consonant sequence)
-    final matches = RegExp(r'[ก-ฮๆฯ]{4,}').allMatches(thText);
-    for (final match in matches) {
-      final seq = match.group(0)!;
-      if (seq.length >= 5) {
-        // อนุญาตให้มีพยัญชนะซ้อนกันได้สูงสุด 7 ตัว หากมี อ, ร, ว, ย อยู่ด้วย (ซึ่งมักทำหน้าที่เป็นสระหรือตัวควบกล้ำ เช่น ทดสอบการ...)
-        final hasVocalic = RegExp(r'[อรวย]');
-        if (!hasVocalic.hasMatch(seq) || seq.length >= 8) {
+      // ตัวลากข้าง (ๅ) ต้องตามหลัง ฤ หรือ ฦ เท่านั้น
+      if (thText.contains('ๅ')) {
+        for (int i = 0; i < thText.length; i++) {
+          if (thText[i] == 'ๅ') {
+            if (i == 0 || !(thText[i - 1] == 'ฤ' || thText[i - 1] == 'ฦ')) {
+              return false;
+            }
+          }
+        }
+      }
+
+      // ตัวการันต์ต้องอยู่หลังพยัญชนะ
+      if (thText.endsWith('์')) {
+        if (thText.length < 2 || !RegExp(r'[ก-ฮ]').hasMatch(thText[thText.length - 2])) {
           return false;
         }
       }
-      if (seq.length == 4) {
-        // พยัญชนะซ้อนกัน 4 ตัว ต้องมี รร (รหัน), ว, อ, ร, ย หรือเป็นคำว่า พรหม
-        if (!seq.contains('รร') &&
-            !seq.contains('ว') &&
-            !seq.contains('อ') &&
-            !seq.contains('ร') &&
-            !seq.contains('ย') &&
-            seq != 'พรหม') {
-          return false;
+
+      // ตรวจสอบลำดับพยัญชนะติดต่อกัน (Consonant sequence)
+      final matches = RegExp(r'[ก-ฮๆฯ]{4,}').allMatches(thText);
+      for (final match in matches) {
+        final seq = match.group(0)!;
+        if (seq.length >= 5) {
+          // อนุญาตให้มีพยัญชนะซ้อนกันได้สูงสุด 7 ตัว หากมี อ, ร, ว, ย อยู่ด้วย (ซึ่งมักทำหน้าที่เป็นสระหรือตัวควบกล้ำ เช่น ทดสอบการ...)
+          final hasVocalic = RegExp(r'[อรวย]');
+          if (!hasVocalic.hasMatch(seq) || seq.length >= 8) {
+            return false;
+          }
+        }
+        if (seq.length == 4) {
+          // พยัญชนะซ้อนกัน 4 ตัว ต้องมี รร (รหัน), ว, อ, ร, ย หรือเป็นคำว่า พรหม
+          // และหากมีตัว ร เดี่ยวๆ (ไม่มี รร) ตัว ร นั้นจะต้องอยู่ตำแหน่งที่ 2 (index 1) เสมอ (เช่น พรหม, ทรหด, มรดก)
+          final hasDoubleR = seq.contains('รร');
+          final hasSingleR = seq.contains('ร') && !hasDoubleR;
+          
+          if (hasSingleR && seq.indexOf('ร') != 1) {
+            return false;
+          }
+          
+          if (!hasDoubleR &&
+              !seq.contains('ว') &&
+              !seq.contains('อ') &&
+              !seq.contains('ร') &&
+              !seq.contains('ย') &&
+              seq != 'พรหม') {
+            return false;
+          }
         }
       }
     }
 
-    // ตรวจสอบคู่สะกดท้ายคำที่ผิดธรรมชาติ (เช่น สะกดคู่ที่ลงท้ายด้วย ส, ศ, ษ, หรือพยัญชนะสะกดคู่อื่นๆ ที่ไม่มีอยู่จริงในภาษาไทยท้ายคำ)
-    if (thText.length >= 3) {
+    // ตรวจสอบคู่สะกดท้ายคำที่ผิดธรรมชาติ (ตรวจเฉพาะกรณีคำเดี่ยวเช่นกัน)
+    if (!isSentence && thText.length >= 3) {
       final lastTwo = thText.substring(thText.length - 2);
       const invalidEndings = {
         'นส', 'ฟส', 'ทส', 'ปส', 'มส', 'กส', 'พส', 'ดส',
@@ -231,7 +282,7 @@ class ThaiMapper implements LanguageMapper {
     }
 
     // สระอำ (ำ) ห้ามมีพยัญชนะสะกดตามหลังท้ายคำเดี่ยว
-    if (RegExp(r'ำ[ก-ฮ]$').hasMatch(thText)) {
+    if (!isSentence && RegExp(r'ำ[ก-ฮ]$').hasMatch(thText)) {
       return false;
     }
 

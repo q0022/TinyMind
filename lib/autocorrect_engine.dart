@@ -117,6 +117,27 @@ class AutocorrectEngine {
     return null;
   }
 
+  static bool _hasTargetCharacters(LanguageMapper mapper, String text) {
+    if (mapper.languageCode == 'th') {
+      return RegExp(r'[ก-์]').hasMatch(text);
+    } else if (mapper.languageCode == 'ko') {
+      return RegExp(r'[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]').hasMatch(text);
+    } else if (mapper.languageCode == 'ja') {
+      return RegExp(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]').hasMatch(text);
+    } else if (mapper.languageCode == 'zh') {
+      return RegExp(r'[\u4e00-\u9fa5]').hasMatch(text);
+    }
+    return false;
+  }
+
+  static bool isKoreanEnabled = false;
+  static bool isJapaneseEnabled = false;
+  static bool isChineseEnabled = false;
+  static String correctionMode = 'hybrid';
+  static String lastDecisionSource = 'regex';
+  static bool isCodeFilterEnabled = true;
+  static void Function(String original, String decision, String type)? onAiDecision;
+
   // ตัวแปรเก็บ Llama Instance
   static Llama? _llama;
   static String? _loadedModelPath;
@@ -157,8 +178,9 @@ class AutocorrectEngine {
       _llama = Llama(
         modelPath,
         contextParams: ContextParams()
-          ..nCtx = 512
-          ..nPredict = 64,
+          ..nCtx = 1024
+          ..nBatch = 1024
+          ..nPredict = 120,
         samplerParams: SamplerParams()
           ..greedy = true, // ใช้ greedy เพื่อความรวดเร็วและตรงประเด็นที่สุดในการแก้คำผิด
         verbose: true,
@@ -193,7 +215,17 @@ class AutocorrectEngine {
   static String convertLayout(String input, {required String languageCode, required bool toTarget}) {
     for (var mapper in _mappers) {
       if (mapper.languageCode == languageCode) {
-        return toTarget ? mapper.convertToTarget(input) : mapper.convertFromTarget(input);
+        if (toTarget) {
+          if (_hasTargetCharacters(mapper, input)) {
+            return input;
+          }
+          return mapper.convertToTarget(input);
+        } else {
+          if (!_hasTargetCharacters(mapper, input)) {
+            return input;
+          }
+          return mapper.convertFromTarget(input);
+        }
       }
     }
     return input;
@@ -201,7 +233,9 @@ class AutocorrectEngine {
 
   // ฟังก์ชันวิเคราะห์การแก้ไขคำผิดระดับคำเดี่ยว (Local - Fast)
   static CorrectionResult? checkAndCorrectLocal(String word) {
+    lastDecisionSource = 'regex';
     if (word.isEmpty || word.length < 2) return null;
+    if (correctionMode == 'ai') return null; // AI mode bypasses local dict to let Alibaba Qwen decide
 
     // ป้องกันการแปลงหากคำเป็นตัวเลขทศนิยม เวอร์ชัน หรือ IP address (เช่น 1.0, 3.14, .50, v1.0.0)
     if (RegExp(r'^v?\d*\.\d+(\.\d+)*$').hasMatch(word)) {
@@ -209,7 +243,7 @@ class AutocorrectEngine {
     }
 
     // ป้องกันการแปลงหากคำเป็นโค้ด พาธ อีเมล หรือสัญลักษณ์ระบบ
-    if (_isCodeOrSymbol(word)) {
+    if (isCodeOrSymbol(word)) {
       return null;
     }
 
@@ -227,16 +261,34 @@ class AutocorrectEngine {
     // 1. ตรวจสอบกรณีพิมพ์ไทยผสมอังกฤษ (สลับเลย์เอาต์กลางคำ) หรือลืมเปลี่ยนภาษาแบบผสม
     // ลองแปลงเป็นภาษาอังกฤษดู
     for (var mapper in _mappers) {
+      if (mapper is KoreanMapper && !isKoreanEnabled) continue;
+      if (mapper is JapaneseMapper && !isJapaneseEnabled) continue;
+      if (mapper is ChineseMapper && !isChineseEnabled) continue;
       final enConverted = mapper.convertFromTarget(word);
       if (enConverted != word) {
         if (_isThaiBypassWord(word)) {
           continue;
         }
         final enFixed = _getCommonTypoCorrection(enConverted) ?? enConverted;
-        if (_commonEnWords.contains(enFixed.toLowerCase()) || 
-            userEnWords.contains(enFixed.toLowerCase())) {
+        
+        String finalEn = enFixed;
+        for (int len = 1; len <= enFixed.length ~/ 2; len++) {
+          final prefix = enFixed.substring(0, len);
+          final sub = enFixed.substring(len);
+          if (sub.startsWith(prefix)) {
+            if (_commonEnWords.contains(sub.toLowerCase()) || 
+                userEnWords.contains(sub.toLowerCase()) ||
+                isValidEnglishWordPattern(sub)) {
+              finalEn = sub;
+              break;
+            }
+          }
+        }
+
+        if (_commonEnWords.contains(finalEn.toLowerCase()) || 
+            userEnWords.contains(finalEn.toLowerCase())) {
           return CorrectionResult(
-            correctedWord: enFixed,
+            correctedWord: finalEn,
             languageCode: mapper.languageCode,
             isToTargetLanguage: false,
           );
@@ -246,17 +298,25 @@ class AutocorrectEngine {
 
     // 2. ลองแปลงเป็นภาษาไทยดู
     for (var mapper in _mappers) {
+      if (mapper is KoreanMapper && !isKoreanEnabled) continue;
+      if (mapper is JapaneseMapper && !isJapaneseEnabled) continue;
+      if (mapper is ChineseMapper && !isChineseEnabled) continue;
+      if (_hasTargetCharacters(mapper, word)) continue;
       final thConverted = mapper.convertToTarget(word);
       if (thConverted != word) {
         final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
-        if (mapper.isCommonWord(thFixed) || mapper.isValidPattern(thFixed)) {
+        if (mapper.isCommonWord(thFixed) || (mapper.languageCode != 'th' && mapper.isValidPattern(thFixed))) {
           // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายหรือมีรูปแบบปกติอยู่แล้ว
-          if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
+          if (RegExp(r"^[a-zA-Z\d'-]+$").hasMatch(word)) {
             if (_commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase())) {
               continue;
             }
             if (!mapper.isCommonWord(thFixed) && word.length >= 4) {
-              continue; // ไม่แปลงคำอังกฤษยาวๆ ที่ไม่ใช่คำไทยยอดนิยม เพื่อป้องกัน False Positive
+              // ผ่อนปรนหากคำภาษาไทยค่อนข้างยาว (เช่น >= 8 ตัวอักษร) และอินพุตอังกฤษไม่ใช่คำอังกฤษยอดนิยม
+              final bool isLongThaiSentence = thFixed.length >= 8 && !isCommonEnglishWord(word);
+              if (!isLongThaiSentence) {
+                continue; // ไม่แปลงคำอังกฤษสั้นๆ ที่ไม่ใช่คำไทยยอดนิยม เพื่อป้องกัน False Positive
+              }
             }
           }
 
@@ -277,9 +337,40 @@ class AutocorrectEngine {
     return _commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase());
   }
 
+  static bool isCommonWord(String word) {
+    for (final mapper in _mappers) {
+      if (mapper.isCommonWord(word)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool isValidEnglishWordPattern(String word) {
+    if (word.isEmpty) return false;
+    
+    // English words must start with a letter, and can be followed by letters, numbers, apostrophe, and hyphen
+    if (!RegExp(r"^[a-zA-Z][a-zA-Z0-9'-]*$").hasMatch(word)) {
+      return false;
+    }
+    
+    // Check casing: should be all lowercase, all uppercase, or title case
+    final isAllLower = word == word.toLowerCase();
+    final isAllUpper = word == word.toUpperCase();
+    final isTitleCase = RegExp(r'^[A-Z][a-z]+$').hasMatch(word);
+    
+    if (!isAllLower && !isAllUpper && !isTitleCase) {
+      return false; // Rejects mixed casing like 'gHoKkwm'
+    }
+    
+    return true;
+  }
+
   // ฟังก์ชันวิเคราะห์การแก้ไขคำผิดระดับคำเดี่ยวแบบเข้มงวดเป็นพิเศษ (สำหรับ Continuous Switch)
   static CorrectionResult? checkAndCorrectLocalStrict(String word) {
+    lastDecisionSource = 'regex';
     if (word.isEmpty || word.length < 2) return null;
+    if (correctionMode == 'ai') return null; // AI mode bypasses local dict to let Alibaba Qwen decide
 
     // ป้องกันการแปลงหากคำเป็นตัวเลขทศนิยม เวอร์ชัน หรือ IP address (เช่น 1.0, 3.14, .50, v1.0.0)
     if (RegExp(r'^v?\d*\.\d+(\.\d+)*$').hasMatch(word)) {
@@ -287,7 +378,7 @@ class AutocorrectEngine {
     }
 
     // ป้องกันการแปลงหากคำเป็นโค้ด พาธ อีเมล หรือสัญลักษณ์ระบบ
-    if (_isCodeOrSymbol(word)) {
+    if (isCodeOrSymbol(word)) {
       return null;
     }
 
@@ -304,15 +395,29 @@ class AutocorrectEngine {
 
     // 1. ลองแปลงเป็นภาษาอังกฤษก่อน
     for (var mapper in _mappers) {
+      if (mapper is KoreanMapper && !isKoreanEnabled) continue;
+      if (mapper is JapaneseMapper && !isJapaneseEnabled) continue;
+      if (mapper is ChineseMapper && !isChineseEnabled) continue;
       final enConverted = mapper.convertFromTarget(word);
       if (enConverted != word) {
         if (_isThaiBypassWord(word)) {
           continue;
         }
         final enFixed = _getCommonTypoCorrection(enConverted) ?? enConverted;
-        if (_commonEnWords.contains(enFixed.toLowerCase()) || userEnWords.contains(enFixed.toLowerCase())) {
+        
+        String finalEn = enFixed;
+        if (enFixed.length >= 3 && enFixed[0].toLowerCase() == enFixed[1].toLowerCase()) {
+          final sub = enFixed.substring(1);
+          if (_commonEnWords.contains(sub.toLowerCase()) || 
+              userEnWords.contains(sub.toLowerCase())) {
+            finalEn = sub;
+          }
+        }
+
+        if (_commonEnWords.contains(finalEn.toLowerCase()) || 
+            userEnWords.contains(finalEn.toLowerCase())) {
           return CorrectionResult(
-            correctedWord: enFixed,
+            correctedWord: finalEn,
             languageCode: mapper.languageCode,
             isToTargetLanguage: false,
           );
@@ -322,17 +427,25 @@ class AutocorrectEngine {
 
     // 2. ลองแปลงเป็นภาษาไทย
     for (var mapper in _mappers) {
+      if (mapper is KoreanMapper && !isKoreanEnabled) continue;
+      if (mapper is JapaneseMapper && !isJapaneseEnabled) continue;
+      if (mapper is ChineseMapper && !isChineseEnabled) continue;
+      if (_hasTargetCharacters(mapper, word)) continue;
       final thConverted = mapper.convertToTarget(word);
       if (thConverted != word) {
         final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
-        if (mapper.isCommonWord(thFixed) || mapper.isValidPatternStrict(thFixed, word)) {
+        if (mapper.isCommonWord(thFixed) || (mapper.languageCode != 'th' && mapper.isValidPatternStrict(thFixed, word))) {
           // ป้องกันการแปลงคำอังกฤษล้วนที่มีความหมายอยู่แล้ว
-          if (RegExp(r'^[a-zA-Z\d]+$').hasMatch(word)) {
+          if (RegExp(r"^[a-zA-Z\d'-]+$").hasMatch(word)) {
             if (_commonEnWords.contains(word.toLowerCase()) || userEnWords.contains(word.toLowerCase())) {
               continue;
             }
             if (!mapper.isCommonWord(thFixed) && word.length >= 4) {
-              continue;
+              // ผ่อนปรนหากคำภาษาไทยค่อนข้างยาว (เช่น >= 8 ตัวอักษร) และอินพุตอังกฤษไม่ใช่คำอังกฤษยอดนิยม
+              final bool isLongThaiSentence = thFixed.length >= 8 && !isCommonEnglishWord(word);
+              if (!isLongThaiSentence) {
+                continue;
+              }
             }
           }
 
@@ -354,7 +467,8 @@ class AutocorrectEngine {
     return bypassWords.contains(lower);
   }
 
-  static bool _isCodeOrSymbol(String word) {
+  static bool isCodeOrSymbol(String word) {
+    if (!isCodeFilterEnabled) return false;
     if (word.isEmpty) return false;
 
     bool matchesBypass = false;
@@ -406,10 +520,16 @@ class AutocorrectEngine {
     if (matchesBypass) {
       bool isThaiWord = false;
       for (var mapper in _mappers) {
+        if (mapper is KoreanMapper && !isKoreanEnabled) continue;
+        if (mapper is JapaneseMapper && !isJapaneseEnabled) continue;
+        if (mapper is ChineseMapper && !isChineseEnabled) continue;
+        if (_hasTargetCharacters(mapper, word)) continue;
         final thConverted = mapper.convertToTarget(word);
         if (thConverted != word) {
           final thFixed = _getCommonTypoCorrection(thConverted) ?? thConverted;
-          if (mapper.isCommonWord(thFixed) || mapper.isValidPatternStrict(thFixed, word)) {
+          final bool useStrict = word.contains('.');
+          final bool isValidTh = useStrict ? mapper.isValidPatternStrict(thFixed, word) : mapper.isValidPattern(thFixed);
+          if (mapper.isCommonWord(thFixed) || (RegExp(r'^[ก-์\d.]+$').hasMatch(thFixed) && isValidTh)) {
             // ดักจับพิเศษ: หากคำดั้งเดิมเริ่มต้นด้วยเครื่องหมายลบ (เช่น -rf, -la)
             // แต่ไม่มีสระหรือวรรณยุกต์ไทยเลย และไม่ใช่คำไทยยอดนิยม เราจะไม่นับเป็นคำไทย (เพื่อป้องกันการสลับคำสั่ง option ใน command line)
             if (word.startsWith('-') && 
@@ -446,18 +566,41 @@ class AutocorrectEngine {
       return true;
     }
 
+    // ตรวจสอบว่ามีเฉพาะตัวอักษร, apostrophe (') และ hyphen (-) เท่านั้น
+    if (!RegExp(r"^[a-zA-Z'-]+$").hasMatch(word)) {
+      return false;
+    }
+
     // ตรวจสอบว่ามีสระภาษาอังกฤษอย่างน้อยหนึ่งตัวหรือไม่ (รวมตัว y)
     final hasVowel = RegExp(r'[aeiouyAEIOUY]').hasMatch(word);
     if (!hasVowel) return false;
 
-    // ตรวจสอบว่ามีสัญลักษณ์แป้นพิมพ์เฉพาะที่ไม่ควรมารวมอยู่ในคำภาษาอังกฤษทั่วไปหรือไม่
-    final hasInvalidEnChar = RegExp(r'[\[\];,/\\]').hasMatch(word);
-    if (hasInvalidEnChar) return false;
-
     return true;
   }
 
-  // แปลข้อความสลับภาษา (อังกฤษ <-> ไทย) ด้วยโมเดล AI
+  static String _sanitizeAIResult(String rawResult) {
+    var trimmed = rawResult.trim();
+    trimmed = trimmed.split('<|im_end|>')[0].trim();
+    trimmed = trimmed.split('<|im_start|>')[0].trim();
+    
+    if (trimmed.contains('->')) {
+      trimmed = trimmed.split('->').last.trim();
+    } else if (trimmed.contains('➔')) {
+      trimmed = trimmed.split('➔').last.trim();
+    }
+    
+    final bool hasThai = RegExp(r'[ก-์]').hasMatch(trimmed);
+    if (hasThai) {
+      trimmed = trimmed.replaceAll('"', '').replaceAll("'", '').replaceAll('`', '');
+    } else {
+      trimmed = trimmed.replaceAll('"', '').replaceAll('`', '');
+      trimmed = trimmed.replaceAll(RegExp(r"^'|'$"), '');
+    }
+    
+    return trimmed.trim();
+  }
+
+  // แปลข้อความสลับภาษา (อังกฤษ/เกาหลี/ญี่ปุ่น/จีน <-> ไทย) ด้วยโมเดล AI
   static Future<String?> translateAI(String text) async {
     if (_llama == null) {
       AppLogger.log("TinyMind AI: Model is not loaded yet.");
@@ -465,19 +608,48 @@ class AutocorrectEngine {
     }
     try {
       _llama!.clear();
+
+      final bool hasKorean = RegExp(r'[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]').hasMatch(text);
+      final bool hasJapanese = RegExp(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]').hasMatch(text);
+      final bool hasChinese = !hasJapanese && RegExp(r'[\u4e00-\u9fa5]').hasMatch(text);
+      final bool hasThai = RegExp(r'[ก-์]').hasMatch(text);
+
+      String sourceLang = "ภาษาอังกฤษ";
+      String targetLang = "ภาษาไทย";
+      String exampleSource = "Beautiful";
+      String exampleTarget = "สวยงาม";
+
+      if (hasKorean) {
+        sourceLang = "ภาษาเกาหลี";
+        targetLang = "ภาษาอังกฤษ";
+        exampleSource = "안녕하세요";
+        exampleTarget = "Hello";
+      } else if (hasJapanese) {
+        sourceLang = "ภาษาญี่ปุ่น";
+        targetLang = "ภาษาอังกฤษ";
+        exampleSource = "こんにちは";
+        exampleTarget = "Hello";
+      } else if (hasChinese) {
+        sourceLang = "ภาษาจีน";
+        targetLang = "ภาษาอังกฤษ";
+        exampleSource = "你好";
+        exampleTarget = "Hello";
+      } else if (hasThai) {
+        sourceLang = "ภาษาไทย";
+        targetLang = "ภาษาอังกฤษ";
+        exampleSource = "สวัสดี";
+        exampleTarget = "Hello";
+      }
+
       final prompt = """<|im_start|>system
-คุณคือระบบแปลภาษาภาษาไทย-อังกฤษที่แม่นยำสูง (Bilingual Translator)
-แปลข้อความที่อยู่ในแท็ก <text>...</text> หากเป็นภาษาไทยให้แปลเป็นภาษาอังกฤษ หากเป็นภาษาอังกฤษให้แปลเป็นภาษาไทย
+คุณคือระบบแปลภาษาที่แม่นยำสูง (Multilingual Translator)
+แปลข้อความที่อยู่ในแท็ก <text>...</text> จาก$sourceLangเป็น$targetLang
 ให้ส่งคืนเฉพาะข้อความที่แปลเสร็จแล้วเท่านั้น ห้ามอธิบาย ห้ามใส่เครื่องหมายคำพูด หรือข้อความอื่นใดเพิ่มเติม
 <|im_end|>
 <|im_start|>user
-<text>แอปเปิ้ล</text><|im_end|>
+<text>$exampleSource</text><|im_end|>
 <|im_start|>assistant
-Apple<|im_end|>
-<|im_start|>user
-<text>Beautiful</text><|im_end|>
-<|im_start|>assistant
-สวยงาม<|im_end|>
+$exampleTarget<|im_end|>
 <|im_start|>user
 <text>$text</text><|im_end|>
 <|im_start|>assistant
@@ -485,10 +657,7 @@ Apple<|im_end|>
 
       _llama!.setPrompt(prompt);
       final correctedText = await _llama!.generateCompleteText(maxTokens: 100);
-      var trimmed = correctedText.trim();
-      trimmed = trimmed.split('<|im_end|>')[0].trim();
-      trimmed = trimmed.split('<|im_start|>')[0].trim();
-      trimmed = trimmed.replaceAll(RegExp(r'^"|"$'), '');
+      final trimmed = _sanitizeAIResult(correctedText);
       return trimmed.isNotEmpty ? trimmed : null;
     } catch (e) {
       AppLogger.log("TinyMind AI Translation Error: $e");
@@ -498,6 +667,11 @@ Apple<|im_end|>
 
   // ฟังก์ชันวิเคราะห์คำและบริบทแป้นพิมพ์โดยการสลับเลย์เอาต์ทางกายภาพ 100% สำหรับอังกฤษ และใช้ Local AI ซ่อมเฉพาะภาษาไทย
   static Future<String?> checkAndCorrectAI(String sentence) async {
+    lastDecisionSource = 'regex';
+    if (correctionMode == 'regex') return null; // Regex mode disables AI completely
+    if (isCodeOrSymbol(sentence)) {
+      return null;
+    }
     try {
       // 1. แปลง Layout ด้วยวิธี Programmatic ของเราก่อนเพื่อความแม่นยำ 100% ด้านตำแหน่งแป้น
       final bool isThaiInput = RegExp(r'[ก-์]').hasMatch(sentence);
@@ -509,68 +683,63 @@ Apple<|im_end|>
 
       // 2. หากคำที่ได้แปลงเป็นภาษาอังกฤษ (จากอินพุตภาษาไทย)
       if (isThaiInput) {
+        String finalEn = converted;
+        for (int len = 1; len <= converted.length ~/ 2; len++) {
+          final prefix = converted.substring(0, len);
+          final sub = converted.substring(len);
+          if (sub.startsWith(prefix)) {
+            if (isCommonEnglishWord(sub) || isValidEnglishWordPattern(sub)) {
+              finalEn = sub;
+              break;
+            }
+          }
+        }
+
         // ตรวจสอบโครงสร้างคำภาษาอังกฤษเบื้องต้น
-        final hasVowel = RegExp(r'[aeiouyAEIOUY]').hasMatch(converted);
-        final hasInvalidEnChar = RegExp(r'[\[\];,/\\]').hasMatch(converted);
+        final hasVowel = RegExp(r'[aeiouyAEIOUY]').hasMatch(finalEn);
+        final hasInvalidEnChar = RegExp(r'[\[\];,/\\]').hasMatch(finalEn);
+        final hasDot = finalEn.contains('.');
         
-        if (hasVowel && !hasInvalidEnChar) {
-          AppLogger.log("TinyMind Engine: English layout conversion bypass AI for '$converted'.");
-          return converted;
+        if (hasVowel && !hasInvalidEnChar && !hasDot) {
+          // ต้องเป็นคำภาษาอังกฤษที่ใช้กันทั่วไป
+          if (isCommonEnglishWord(finalEn)) {
+            AppLogger.log("TinyMind Heuristic (Regex): English layout conversion bypass AI for '$finalEn'.");
+            lastDecisionSource = 'regex';
+            return finalEn;
+          }
+          
+          // ถ้าเป็นรูปแบบคำภาษาอังกฤษแต่ไม่ใช่คำใน Dic -> ส่งไปถาม AI
+          if (isValidEnglishWordPattern(finalEn)) {
+            final String? finalChoice = await identifyCorrectWordAI(finalEn, sentence);
+            if (finalChoice == finalEn) {
+              lastDecisionSource = 'ai';
+              AppLogger.log("TinyMind AI Model (Alibaba Qwen): Confirmed English selection '$finalEn' over Thai '$sentence'");
+              return finalEn;
+            }
+          }
         }
         
-        // หากไม่มีสระหรือมีอักขระพิเศษภาษาอังกฤษมากเกินไป ถือว่าแปลงเป็นคำอังกฤษไม่สำเร็จ
+        // หากไม่ใช่คำอังกฤษที่ถูกต้อง ถือว่าแปลงเป็นคำอังกฤษไม่สำเร็จ
         return null;
       }
 
-      // 3. หากคำที่ได้แปลงเป็นภาษาไทย (จากอินพุตภาษาอังกฤษ)
+      // 3. หากคำที่ได้แปลงเป็นภาษาไทย (จากอินพุตอังกฤษ)
       final thMapper = _mappers.firstWhere((m) => m.languageCode == 'th');
-      if (thMapper.isValidPatternStrict(converted, '')) {
-        AppLogger.log("TinyMind Engine: Thai layout conversion bypass AI for '$converted'.");
+      if (thMapper.isCommonWord(converted)) {
+        AppLogger.log("TinyMind Heuristic (Regex): Thai layout conversion bypass AI for common word '$converted'.");
+        lastDecisionSource = 'regex';
         return converted;
       }
 
-      // 4. ถ้าโครงสร้างคำไทยยังก้ำกึ่ง (สะกดไม่สมบูรณ์ เช่น สคริปต) ค่อยเรียก AI ช่วยตรวจสะกดคำภาษาไทย
-      if (_llama == null) {
-        AppLogger.log("TinyMind AI: Model is not loaded yet.");
+      // 4. ถ้าโครงสร้างคำไทยยังก้ำกึ่ง ส่งไปเปรียบเทียบใน identifyCorrectWordAI (เป็น Layout Classifier 3 ตัวเลือก)
+      final String? finalChoice = await identifyCorrectWordAI(sentence, converted);
+      if (finalChoice == converted) {
+        lastDecisionSource = 'ai';
+        AppLogger.log("TinyMind AI Model (Alibaba Qwen): Confirmed Thai selection '$converted' over English '$sentence'");
+        return converted;
+      } else {
+        AppLogger.log("TinyMind AI Model (Alibaba Qwen): Rejected Thai spelling '$converted' in favor of English '$sentence'");
         return null;
-      }
-
-      _llama!.clear();
-      final prompt = """<|im_start|>system
-คุณคือระบบแก้ไขคำสะกดผิดภาษาไทย (Thai Spelling Corrector)
-แก้ไขคำภาษาไทยที่พิมพ์ผิดหรือขาดตกบกพร่องให้ถูกต้อง โดยใช้คำที่พิมพ์สะกดใกล้เคียงที่สุด
-ห้ามเปลี่ยนรูปคำ ห้ามเปลี่ยนรูปไวยากรณ์ และห้ามแปลงเป็นคำความหมายอื่นเด็ดขาด
-หากคำนั้นสะกดถูกต้องดีอยู่แล้ว ให้ส่งคืนคำเดิมตรงๆ
-ผลลัพธ์จะต้องมีเฉพาะคำที่แก้ไขแล้วเท่านั้น ห้ามมีคำอธิบายอื่นใด และห้ามใส่เครื่องหมายอัญประกาศ
-
-ตัวอย่าง:
-- "สคริปต" -> "สคริปต์"
-- "สวัสดี" -> "สวัสดี"
-- "คอมพิวเตอร" -> "คอมพิวเตอร์"
-<|im_end|>
-<|im_start|>user
-แก้ไขคำนี้: "$converted"<|im_end|>
-<|im_start|>assistant
-""";
-
-      _llama!.setPrompt(prompt);
-      
-      // สั่ง Generate ข้อความแบบสมบูรณ์
-      final correctedText = await _llama!.generateCompleteText(maxTokens: 30);
-      var trimmed = correctedText.trim().replaceAll(RegExp(r'^"|"$'), '');
-      
-      // ล้างข้อมูลเศษระบบของเทมเพลต ChatML เผื่อโมเดลตัวเล็กพ่นหลุดออกมา
-      trimmed = trimmed.split('<|im_end|>')[0].trim();
-      trimmed = trimmed.split('<|im_start|>')[0].trim();
-      trimmed = trimmed.replaceAll(RegExp(r'^"|"$'), '');
-      
-      if (trimmed.isEmpty) return null;
-
-      // 5. Validation Guard: ตรวจสอบโครงสร้างภาษาไทยของคำที่ได้จาก AI อีกรอบ
-      if (thMapper.isValidPatternStrict(trimmed, '')) {
-        if (trimmed != sentence) {
-          return trimmed;
-        }
       }
     } catch (e) {
       AppLogger.log("TinyMind Local AI Inference Error: $e");
@@ -580,8 +749,10 @@ Apple<|im_end|>
 
   // วิเคราะห์คำที่สลับแป้นทั้ง 2 ภาษา และให้ AI ระบุว่าคำไหนถูกต้องตามพจนานุกรม
   static Future<String?> identifyCorrectWordAI(String wordEn, String wordTh) async {
+    lastDecisionSource = 'regex';
+    if (correctionMode == 'regex') return null; // Regex mode disables AI completely
     // 0. ป้องกันการแปลงหากคำใดคำหนึ่งเป็นโค้ด พาธ อีเมล หรือสัญลักษณ์ระบบ
-    if (_isCodeOrSymbol(wordEn) || _isCodeOrSymbol(wordTh)) {
+    if (isCodeOrSymbol(wordEn) || isCodeOrSymbol(wordTh)) {
       return null;
     }
 
@@ -607,6 +778,14 @@ Apple<|im_end|>
           isEnValid = false;
         }
       }
+      // 1.4 ถ้าไม่ใช่คำอังกฤษยอดนิยมที่สะกดในพจนานุกรม จะต้องมีโครงสร้าง casing ที่เป็นธรรมชาติด้วย
+      // เพื่อป้องกันคำคีย์บอร์ดขยะที่กด Shift (เช่น oujxyPs ที่มี P พิมพ์ใหญ่ปนมากลางคำ)
+      final bool isCommonEn = _commonEnWords.contains(lowerEn) || userEnWords.contains(lowerEn);
+      if (isEnValid && !isCommonEn) {
+        if (!isValidEnglishWordPattern(wordEn)) {
+          isEnValid = false;
+        }
+      }
     }
 
     // 2. ตรวจสอบความถูกต้องของคำไทย (ใช้เกณฑ์เข้มงวดเพื่อความปลอดภัยสูงสุดในการคัดกรอง)
@@ -621,41 +800,56 @@ Apple<|im_end|>
     final bool isCommonTh = thMapper.isCommonWord(wordTh);
 
     // [RULE 1] ป้องกันคำขยะฝั่งอังกฤษ (เช่น 9i;0l หรือ mflv[) และยืนยันคำไทยที่สะกดถูกต้อง
-    if (!isEnValid && isThValid) {
-      AppLogger.log("TinyMind Heuristic [RULE 1]: English '$wordEn' is invalid, selecting Thai '$wordTh' directly.");
+    // ในโหมด AI (correctionMode == 'ai') เราจะไม่ตัดสิทธิ์คำอังกฤษเพื่อให้ AI เป็นผู้พิจารณาโดยตรง
+    if (correctionMode != 'ai' && !isEnValid && isThValid && isCommonTh) {
+      AppLogger.log("TinyMind Heuristic [RULE 1] (Regex): English '$wordEn' is invalid, selecting Thai '$wordTh' directly.");
+      lastDecisionSource = 'regex';
+      onAiDecision?.call(wordEn, 'THA ($wordTh)', 'Regex');
       return wordTh;
     }
 
     // [RULE 2] การสลับเป็นอังกฤษทันทีเมื่อคำไทยสะกดผิดโครงสร้างธรรมชาติอย่างชัดเจน
-    if (isEnValid && !isThValid) {
-      AppLogger.log("TinyMind Heuristic [RULE 2 - Invalid Thai]: Selecting English '$wordEn' directly.");
+    // ในโหมด AI (correctionMode == 'ai') เราจะไม่ตัดสิทธิ์คำไทยที่สะกดไม่สมบูรณ์ เพื่อปล่อยให้ AI ได้ตัดสินใจคำสะกดค้าง
+    if (correctionMode != 'ai' && isEnValid && !isThValid) {
+      AppLogger.log("TinyMind Heuristic [RULE 2 - Invalid Thai] (Regex): Selecting English '$wordEn' directly.");
+      lastDecisionSource = 'regex';
+      onAiDecision?.call(wordEn, 'ENG ($wordEn)', 'Regex');
       return wordEn;
     }
 
-    if (isEnValid && !thMapper.isValidPatternStrict(wordTh, '')) {
+    if (correctionMode != 'ai' && isEnValid && !thMapper.isValidPatternStrict(wordTh, '')) {
       if (isCommonEn || lowerEn.length < 6) {
-        AppLogger.log("TinyMind Heuristic [RULE 2 - Strict Thai Failure]: Selecting English '$wordEn' directly.");
+        AppLogger.log("TinyMind Heuristic [RULE 2 - Strict Thai Failure] (Regex): Selecting English '$wordEn' directly.");
+        lastDecisionSource = 'regex';
+        onAiDecision?.call(wordEn, 'ENG ($wordEn)', 'Regex');
         return wordEn;
       }
     }
 
     // [RULE 3] ยึดภาษาไทยหากคู่คำภาษาอังกฤษไม่ใช่คำจริงในพจนานุกรม
-    if (isEnValid && isThValid) {
+    // ในโหมด AI (correctionMode == 'ai') เราจะไม่ใช้กฎนี้ในการตัดสิทธิ์
+    if (correctionMode != 'ai' && isEnValid && isThValid) {
       if (!isCommonEn && isCommonTh) {
-        AppLogger.log("TinyMind Heuristic [RULE 3a]: English '$wordEn' is not in Dict, but Thai '$wordTh' is common. Choosing Thai.");
+        AppLogger.log("TinyMind Heuristic [RULE 3a] (Regex): English '$wordEn' is not in Dict, but Thai '$wordTh' is common. Choosing Thai.");
+        lastDecisionSource = 'regex';
+        onAiDecision?.call(wordEn, 'THA ($wordTh)', 'Regex');
         return wordTh;
       }
     }
 
     // 4. ถ้าไม่ถูกต้องทั้งคู่ -> คืนค่า null ทันทีโดยไม่ต้องเรียก AI
-    if (!isEnValid && !isThValid) {
+    // ในโหมด AI (correctionMode == 'ai') เราจะไม่ตัดสิทธิ์ เพื่อปล่อยให้ AI ได้ตัดสินใจ 100%
+    if (correctionMode != 'ai' && !isEnValid && !isThValid) {
       AppLogger.log("TinyMind Heuristic: Both words are invalid (En='$wordEn', Th='$wordTh'). Wait for more input.");
+      onAiDecision?.call(wordEn, 'NONE', 'Regex');
       return null;
     }
 
     // 5. ถ้าไม่ใช่คำทั่วไปทั้งคู่ และความยาวคำสะสมสั้น (< 6 ตัวอักษร) -> คืน null ทันทีเพื่อรอพิมพ์คำให้เสร็จ
-    if (!isCommonEn && !isCommonTh && wordEn.length < 6) {
+    // แต่ถ้าเป็นโหมด AI เราสามารถส่งให้ AI วิเคราะห์ล่วงหน้าได้
+    if (correctionMode != 'ai' && !isCommonEn && !isCommonTh && wordEn.length < 6) {
       AppLogger.log("TinyMind Heuristic: Neither word in Dict and length < 6. Wait for more input.");
+      onAiDecision?.call(wordEn, 'NONE', 'Regex');
       return null;
     }
 
@@ -668,56 +862,69 @@ Apple<|im_end|>
     try {
       _llama!.clear();
 
-      // ปรับปรุง Prompt ให้เหมาะสมกับการเป็น Linguistic Classifier สำหรับ Qwen
       final prompt = """<|im_start|>system
-You are a bilingual linguistic classifier.
-Analyze the following two candidate words (one English, one Thai). One of them was typed using the incorrect keyboard layout.
-Determine which word is correct, meaningful, and grammatically valid in its respective language.
+You are a strict keyboard layout classifier.
+Look at the input and identify which side is a REAL, MEANINGFUL word.
 
-Output ONLY the chosen correct word.
-If both are valid words, output the most common and meaningful one.
-If neither is a correct or meaningful word, output "NONE".
-Do NOT explain your reasoning. Do NOT wrap the output in quotes.
+CRITICAL RULES:
+1. Meaningful English word (e.g., "code", "hello") -> ENG
+2. Meaningful Thai word (e.g., "คอมพิวเตอร์", "ออกมา") -> THA
+3. Gibberish / Random keys on both sides (e.g., "vvd,k", "qwxzcv", "ๆไผปแฮ") -> NONE
 
-Examples:
-- English: "code", Thai: "แเนำ" -> "code"
-- English: "helo", Thai: "เหัล" -> "NONE"
-- English: "computr", Thai: "คอมพิวเตอร์" -> "คอมพิวเตอร์"
-- English: "qwxzcv", Thai: "ๆไผปแฮ" -> "NONE"
+Response strictly with only one word: ENG, THA, or NONE. No explanation.
 <|im_end|>
 <|im_start|>user
-English: "$wordEn", Thai: "$wordTh"<|im_end|>
+Candidates -> English: "$wordEn", Thai: "$wordTh"<|im_end|>
 <|im_start|>assistant
 """;
 
       _llama!.setPrompt(prompt);
       
-      final output = await _llama!.generateCompleteText(maxTokens: 15);
-      var trimmed = output.trim().replaceAll(RegExp(r'^"|"$'), '');
-      trimmed = trimmed.split('<|im_end|>')[0].trim();
-      trimmed = trimmed.split('<|im_start|>')[0].trim();
-      trimmed = trimmed.replaceAll(RegExp(r'^"|"$'), '');
+      final output = await _llama!.generateCompleteText(maxTokens: 5);
+      final fullOutput = output.trim();
       
-      if (trimmed == "NONE" || trimmed.isEmpty) {
-        return null;
+      // Parse last line
+      final lines = fullOutput.split('\n');
+      String lastLine = '';
+      for (int i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].trim().isNotEmpty) {
+          lastLine = lines[i].trim().toUpperCase();
+          break;
+        }
       }
       
-      final String lowerTrimmed = trimmed.toLowerCase();
-      final String lowerEn = wordEn.toLowerCase();
+      bool isThaiChosen = lastLine.contains("THA") || lastLine.contains("RESULT: THA");
+      bool isEnglishChosen = lastLine.contains("ENG") || lastLine.contains("RESULT: ENG");
+      
+      if (!isThaiChosen && !isEnglishChosen) {
+        final words = lastLine.split(RegExp(r'[^A-Z]'));
+        isThaiChosen = words.contains("THA") || words.contains("TH");
+        isEnglishChosen = words.contains("ENG") || words.contains("EN");
+      }
 
-      // คืนคำที่ได้จากการตัดสินใจของ AI โดยเช็คความยืดหยุ่น (contains)
-      if (lowerTrimmed == "none") {
-        return null;
-      }
-      if (lowerTrimmed == lowerEn || lowerTrimmed.contains(lowerEn)) {
-        return wordEn;
-      }
-      if (trimmed == wordTh || trimmed.contains(wordTh)) {
+      if (isThaiChosen) {
+        if (!isThValid) {
+          AppLogger.log("TinyMind AI Safe Guard: Rejected Thai selection '$wordTh' because Thai spelling is invalid.");
+          onAiDecision?.call(wordEn, 'NONE (Invalid Thai Safeguard)', 'Local AI');
+          return null;
+        }
+        lastDecisionSource = 'ai';
+        AppLogger.log("TinyMind AI Model (Alibaba Qwen): Selected Thai '$wordTh' (AI response: $lastLine)");
+        onAiDecision?.call(wordEn, 'THA ($wordTh)', 'Local AI');
         return wordTh;
+      } else if (isEnglishChosen) {
+        lastDecisionSource = 'ai';
+        AppLogger.log("TinyMind AI Model (Alibaba Qwen): Selected English '$wordEn' (AI response: $lastLine)");
+        onAiDecision?.call(wordEn, 'ENG ($wordEn)', 'Local AI');
+        return wordEn;
+      } else {
+        AppLogger.log("TinyMind AI Model (Alibaba Qwen): Selected NONE or invalid response (AI response: $lastLine)");
+        onAiDecision?.call(wordEn, 'NONE ($lastLine)', 'Local AI');
       }
     } catch (e) {
       AppLogger.log("TinyMind AI identifyCorrectWordAI Error: $e");
     }
+    onAiDecision?.call(wordEn, 'NONE', 'Local AI');
     return null;
   }
 }

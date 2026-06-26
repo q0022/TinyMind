@@ -76,6 +76,79 @@ class DashboardTab extends StatelessWidget {
           ],
         ),
         
+        const SizedBox(height: 20),
+
+        // Keyboard Sandbox (ลบเกิน / ลบขาด Test Area)
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: state._surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: state._borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.keyboard_alt_outlined, color: Colors.blueAccent, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        AppTranslations.translate('sandbox_title', state._displayLanguage),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      state._resetSandbox();
+                    },
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: Text(AppTranslations.translate('sandbox_reset', state._displayLanguage), style: const TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppTranslations.translate('sandbox_desc', state._displayLanguage),
+                style: TextStyle(fontSize: 11, color: state._textColorSecondary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: state._sandboxController,
+                focusNode: state._sandboxFocusNode,
+                readOnly: true,
+                style: TextStyle(
+                  fontFamily: 'Courier',
+                  fontSize: 14,
+                  color: state._textColorPrimary,
+                  letterSpacing: 1.2,
+                ),
+                decoration: InputDecoration(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  filled: true,
+                  fillColor: state._isDark ? Colors.black.withOpacity(0.2) : Colors.white.withOpacity(0.8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: state._borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.blueAccent.withOpacity(0.5)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
         const SizedBox(height: 24),
         Text(
           AppTranslations.translate('recent_activity', state._displayLanguage),

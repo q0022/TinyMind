@@ -52,15 +52,15 @@ class JapaneseMapper implements LanguageMapper {
     for (final word in _commonJaWords) {
       if (text.contains(word)) return true;
     }
-    // Check if it contains Hiragana, Katakana, or Kanji
-    return RegExp(r'[ぁ-んァ-ン一-龠]').hasMatch(text);
+    // Must be fully Japanese characters (Hiragana, Katakana, Kanji, long vowel mark)
+    return RegExp(r'^[ぁ-んァ-ン一-龠ー]+$').hasMatch(text);
   }
 
   @override
   bool isValidPatternStrict(String text, String originalEnText) {
     if (text.isEmpty) return false;
-    // Must be fully Japanese characters (Hiragana, Katakana, Kanji, digits, spaces, punctuation)
-    return RegExp(r'^[ぁ-んァ-ン一-龠\d\s\p{P}ー]+$', unicode: true).hasMatch(text);
+    // Must be fully Japanese characters (Hiragana, Katakana, Kanji, long vowel mark)
+    return RegExp(r'^[ぁ-んァ-ン一-龠ー]+$').hasMatch(text);
   }
 
   @override

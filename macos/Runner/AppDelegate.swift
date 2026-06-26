@@ -15,6 +15,7 @@ class AppDelegate: FlutterAppDelegate {
     
     // Enter Block Control for AI
     var needsAutocorrect: Bool = false
+    var isReplacingText: Bool = false
     
     override func applicationDidFinishLaunching(_ notification: Notification) {
         print("AppDelegate: applicationDidFinishLaunching starting...")
@@ -152,6 +153,9 @@ class AppDelegate: FlutterAppDelegate {
             } else if call.method == "releaseEnter" {
                 self?.releaseEnter()
                 result(true)
+            } else if call.method == "getEnabledLanguages" {
+                let langs = self?.getEnabledLanguages() ?? ["en", "th"]
+                result(langs)
             } else {
                 result(FlutterMethodNotImplemented)
             }
@@ -192,6 +196,21 @@ class AppDelegate: FlutterAppDelegate {
             callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
                 if let refcon = refcon {
                     let appDelegate = Unmanaged<AppDelegate>.fromOpaque(refcon).takeUnretainedValue()
+                    
+                    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                        if appDelegate.isReplacingText {
+                            print("AppDelegate: EventTap disabled by type \(type.rawValue) during replaceText. Keeping it disabled.")
+                            fflush(stdout)
+                            return Unmanaged.passRetained(event)
+                        }
+                        if let tap = appDelegate.eventTap {
+                            CGEvent.tapEnable(tap: tap, enable: true)
+                            print("AppDelegate: EventTap disabled by type \(type.rawValue), re-enabled it successfully.")
+                            fflush(stdout)
+                        }
+                        return Unmanaged.passRetained(event)
+                    }
+                    
                     if let resultEvent = appDelegate.handleKeyEvent(event) {
                         return Unmanaged.passRetained(resultEvent)
                     } else {
@@ -218,9 +237,13 @@ class AppDelegate: FlutterAppDelegate {
     func startMonitoringMouse() {
         // ...
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            print("AppDelegate: clearBuffer called due to global mouse click")
+            fflush(stdout)
             self?.channel?.invokeMethod("clearBuffer", arguments: nil)
         }
         NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            print("AppDelegate: clearBuffer called due to local mouse click")
+            fflush(stdout)
             self?.channel?.invokeMethod("clearBuffer", arguments: nil)
             return event
         }
@@ -335,13 +358,23 @@ class AppDelegate: FlutterAppDelegate {
         }
 
         if flags.contains(.maskCommand) || flags.contains(.maskControl) {
-            channel?.invokeMethod("clearBuffer", arguments: nil)
+            // Do not clear buffer for layout switch shortcuts (like Cmd+Space, Ctrl+Space)
+            if keyCode != 49 {
+                print("AppDelegate: clearBuffer called due to Cmd/Ctrl shortcut (keyCode: \(keyCode))")
+                fflush(stdout)
+                channel?.invokeMethod("clearBuffer", arguments: nil)
+            } else {
+                print("AppDelegate: Cmd/Ctrl shortcut with keyCode 49 (Space) detected. NOT clearing buffer.")
+                fflush(stdout)
+            }
             return event
         }
         
         // Navigation keys: Esc (53), Left (123), Right (124), Down (125), Up (126), Home (115), PageUp (116), End (119), PageDown (121)
         let navigationKeys: Set<Int64> = [53, 123, 124, 125, 126, 115, 116, 119, 121]
         if navigationKeys.contains(keyCode) {
+            print("AppDelegate: clearBuffer called due to navigation key (keyCode: \(keyCode))")
+            fflush(stdout)
             channel?.invokeMethod("clearBuffer", arguments: nil)
             return event
         }
@@ -362,33 +395,62 @@ class AppDelegate: FlutterAppDelegate {
         return event
     }
     func replaceText(backspaces: Int, text: String) {
+        print("AppDelegate: replaceText command received. backspaces=\(backspaces), text='\(text)'")
+        fflush(stdout)
+        isReplacingText = true
         // Detect language to switch layout
+        var targetLang = "en"
         let hasThai = text.unicodeScalars.contains { $0.value >= 0x0E00 && $0.value <= 0x0E7F }
-        let hasEnglish = text.unicodeScalars.contains { ($0.value >= 65 && $0.value <= 90) || ($0.value >= 97 && $0.value <= 122) }
+        let hasKorean = text.unicodeScalars.contains { ($0.value >= 0xAC00 && $0.value <= 0xD7A3) || ($0.value >= 0x1100 && $0.value <= 0x11FF) || ($0.value >= 0x3130 && $0.value <= 0x318F) }
+        let hasJapaneseKana = text.unicodeScalars.contains { ($0.value >= 0x3040 && $0.value <= 0x309F) || ($0.value >= 0x30A0 && $0.value <= 0x30FF) }
+        let hasChineseHanzi = text.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
         
         if hasThai {
-            switchKeyboardLayout(toThai: true)
-        } else if hasEnglish {
-            switchKeyboardLayout(toThai: false)
+            targetLang = "th"
+        } else if hasKorean {
+            targetLang = "ko"
+        } else if hasJapaneseKana {
+            targetLang = "ja"
+        } else if hasChineseHanzi {
+            targetLang = "zh"
+        } else {
+            let hasEnglish = text.unicodeScalars.contains { ($0.value >= 65 && $0.value <= 90) || ($0.value >= 97 && $0.value <= 122) }
+            if hasEnglish {
+                targetLang = "en"
+            }
         }
-
+        
         if let eventTap = eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
+            usleep(1000) // Allow OS to complete the event tap transition
         }
         
         let source = CGEventSource(stateID: .combinedSessionState)
         
-        for _ in 0..<backspaces {
-            let down = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: true)
-            let up = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: false)
-            down?.post(tap: .cghidEventTap)
-            up?.post(tap: .cghidEventTap)
-            usleep(1000)
+        if backspaces > 0 {
+            print("AppDelegate: replaceText: Sending \(backspaces) Backspace events...")
+            fflush(stdout)
+            for _ in 0..<backspaces {
+                let down = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: true)
+                let up = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: false)
+                down?.flags = []
+                up?.flags = []
+                down?.post(tap: .cghidEventTap)
+                usleep(500)
+                up?.post(tap: .cghidEventTap)
+                usleep(500)
+            }
         }
         
+        switchKeyboardLayout(to: targetLang)
+        
         let utf16Chars = Array(text.utf16)
+        print("AppDelegate: replaceText: Typing Unicode string '\(text)' with \(utf16Chars.count) UTF-16 code units...")
+        fflush(stdout)
         let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        down?.flags = []
+        up?.flags = []
         
         down?.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
         up?.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
@@ -397,14 +459,18 @@ class AppDelegate: FlutterAppDelegate {
         up?.post(tap: .cghidEventTap)
         
         if let eventTap = eventTap {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                CGEvent.tapEnable(tap: eventTap, enable: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.isReplacingText = false
+                if let tap = self?.eventTap {
+                    CGEvent.tapEnable(tap: tap, enable: true)
+                }
             }
+        } else {
+            isReplacingText = false
         }
     }
     
-    func switchKeyboardLayout(toThai: Bool) {
-        let targetLanguage = toThai ? "th" : "en"
+    func switchKeyboardLayout(to targetLanguage: String) {
         print("AppDelegate: switchKeyboardLayout: requested switch to \(targetLanguage)")
         fflush(stdout)
         
@@ -426,7 +492,7 @@ class AppDelegate: FlutterAppDelegate {
                     if languages.contains(where: { $0.hasPrefix(targetLanguage) }) {
                         let status = TISSelectInputSource(source)
                         if status == noErr {
-                            print("AppDelegate: switchKeyboardLayout: Successfully switched keyboard layout to \(toThai ? "Thai" : "English")")
+                            print("AppDelegate: switchKeyboardLayout: Successfully switched keyboard layout to \(targetLanguage)")
                             fflush(stdout)
                             return
                         } else {
@@ -437,6 +503,34 @@ class AppDelegate: FlutterAppDelegate {
                 }
             }
         }
+    }
+    
+    func getEnabledLanguages() -> [String] {
+        guard let sources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+            return ["en", "th"]
+        }
+        var languagesList = Set<String>()
+        for source in sources {
+            guard let typePtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceType) else { continue }
+            let type = Unmanaged<CFString>.fromOpaque(typePtr).takeUnretainedValue() as String
+            
+            if type == kTISTypeKeyboardLayout as String || 
+               type == "TISInputSourceTypeKeyboardLayout" ||
+               type.contains("Keyboard") || 
+               type.contains("InputMethod") {
+                if let langPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages) {
+                    let languages = Unmanaged<CFArray>.fromOpaque(langPtr).takeUnretainedValue() as? [String] ?? []
+                    for lang in languages {
+                        let code = lang.split(separator: "-").first.map(String.init) ?? lang
+                        languagesList.insert(code.lowercased())
+                    }
+                }
+            }
+        }
+        if languagesList.isEmpty {
+            return ["en", "th"]
+        }
+        return Array(languagesList)
     }
 }
 

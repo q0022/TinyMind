@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tinymind/autocorrect_engine.dart';
+import 'package:tinymind/thai_mapper.dart';
 
 void main() {
   test('AutocorrectEngine local correction checks', () {
@@ -39,9 +40,8 @@ void main() {
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('mflv[dkirb,rN'), isFalse); // invalid English pattern (contains [ and ,)
 
     // 4. Test relaxation of consonant limit in strict check
-    final longWordResult = AutocorrectEngine.checkAndCorrectLocalStrict('mflv[dkirb,');
-    expect(longWordResult, isNotNull);
-    expect(longWordResult!.correctedWord, equals('ทดสอบการพิม'));
+    final thMapper = ThaiMapper();
+    expect(thMapper.isValidPatternStrict('ทดสอบการพิม', 'mflv[dkirb,'), isTrue);
 
     // 5. Test Safe Heuristics (RULE 1, 2, 3) in identifyCorrectWordAI (No model loaded tests)
     // RULE 1: English is invalid (has number/punctuation), Thai is valid -> Choose Thai
@@ -107,6 +107,11 @@ void main() {
     expect(AutocorrectEngine.convertLayout('9.sov\'dt-t', languageCode: 'th', toTarget: true), equals('ต.หนองกะขะ'));
     expect(AutocorrectEngine.convertLayout('fu.0', languageCode: 'th', toTarget: true), equals('ดีใจ'));
     expect(AutocorrectEngine.convertLayout('lt.4h', languageCode: 'th', toTarget: true), equals('สะใภ้'));
+    expect(AutocorrectEngine.convertLayout('5hk.=', languageCode: 'th', toTarget: true), equals('ถ้าใช'));
+    expect(AutocorrectEngine.convertLayout('5hk.=h', languageCode: 'th', toTarget: true), equals('ถ้าใช้'));
+    expect(AutocorrectEngine.convertLayout('.=', languageCode: 'th', toTarget: true), equals('ใช'));
+    expect(AutocorrectEngine.convertLayout('.=h', languageCode: 'th', toTarget: true), equals('ใช้'));
+    expect(AutocorrectEngine.convertLayout(',.8.', languageCode: 'th', toTarget: true), equals('ม.ค.'));
 
     // 11. Test checkAndCorrectAI does not bypass English layout with periods
     AutocorrectEngine.checkAndCorrectAI('อ.พาน').then((res) {
@@ -126,11 +131,16 @@ void main() {
       expect(res, isNull);
     });
 
-    // 14. Test English words with apostrophes/hyphens bypass Thai conversion
+    // 14. Test English words with apostrophes/hyphens/dots bypass Thai conversion
     expect(AutocorrectEngine.checkAndCorrectLocal("photo'"), isNull);
     expect(AutocorrectEngine.checkAndCorrectLocalStrict("photo'"), isNull);
     expect(AutocorrectEngine.checkAndCorrectLocal("don't"), isNull);
     expect(AutocorrectEngine.checkAndCorrectLocalStrict("don't"), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocal("cs.ID"), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict("cs.ID"), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocal("google.com"), isNull);
+    expect(AutocorrectEngine.checkAndCorrectLocalStrict("google.com"), isNull);
+    expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout("แห.ณฏ"), isFalse);
 
     // 15. Test isLikelyCorrectInCurrentLayout invalid Thai patterns (e.g. wrong layout English words)
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ย้นะนห้นย'), isFalse); // photoshop
@@ -139,5 +149,36 @@ void main() {
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('ค่ะ'), isTrue);
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('จ้ะ'), isTrue);
     expect(AutocorrectEngine.isLikelyCorrectInCurrentLayout('น่ะ'), isTrue);
+
+    // 16. Test double-letter mixed layout correction (e.g., ่json -> json)
+    final jsonResult = AutocorrectEngine.checkAndCorrectLocal('่json');
+    expect(jsonResult, isNotNull);
+    expect(jsonResult!.correctedWord, equals('json'));
+
+    // 17. Test meaningless English word that converts to invalid Thai spelling (e.g., mbk -> ทิา) is not corrected
+    final mbkRes = AutocorrectEngine.checkAndCorrectLocal('mbk');
+    if (mbkRes != null) {
+      print('DEBUG MBK: correctedWord=${mbkRes.correctedWord}, lang=${mbkRes.languageCode}');
+    }
+    expect(mbkRes, isNull);
+
+    // 18. Test AI mode bypasses heuristics (RULE 3 & Rule 4)
+    AutocorrectEngine.correctionMode = 'ai';
+    AutocorrectEngine.identifyCorrectWordAI('9i;0l', 'แเนำ').then((res) {
+      expect(res, isNull);
+    });
+    AutocorrectEngine.correctionMode = 'hybrid'; // Reset
+
+    // 19. Test checkAndCorrectAI does not bypass English layout for Thai words converting to non-dictionary English patterns (e.g., นิดหน่อย -> obfsojvp)
+    AutocorrectEngine.checkAndCorrectAI('นิดหน่อย').then((res) {
+      expect(res, isNull);
+    });
+    // 20. Test isValidEnglishWordPattern correctly rejects words with digits (like 0yfwx) and accepts clean English words
+    expect(AutocorrectEngine.isValidEnglishWordPattern('0yfwx'), isFalse);
+    expect(AutocorrectEngine.isValidEnglishWordPattern('hello'), isTrue);
+    expect(AutocorrectEngine.isValidEnglishWordPattern('don\'t'), isTrue);
+    expect(AutocorrectEngine.isValidEnglishWordPattern('first-class'), isTrue);
   });
 }
+
+

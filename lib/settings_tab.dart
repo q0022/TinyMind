@@ -105,6 +105,89 @@ class SettingsTab extends StatelessWidget {
           
           const SizedBox(height: 20),
 
+          _buildSettingsBlock(AppTranslations.translate('keyboard_layouts_group', state._displayLanguage), [
+            _buildSwitchTile(
+              AppTranslations.translate('auto_detect_os_keyboards', state._displayLanguage),
+              AppTranslations.translate('auto_detect_os_keyboards_desc', state._displayLanguage),
+              state._useOSKeyboards,
+              (val) {
+                state.updateState(() {
+                  state._useOSKeyboards = val;
+                  state._saveSetting('useOSKeyboards', val);
+                  state._updateActiveKeyboards();
+                });
+              },
+            ),
+            if (state._useOSKeyboards) ...[
+              Divider(color: state._dividerColor),
+              _buildReadOnlyLayoutTile(
+                AppTranslations.translate('korean_layout', state._displayLanguage),
+                state._isKoreanEnabled 
+                    ? AppTranslations.translate('keyboard_detected', state._displayLanguage)
+                    : AppTranslations.translate('keyboard_not_detected', state._displayLanguage),
+                state._isKoreanEnabled,
+              ),
+              Divider(color: state._dividerColor),
+              _buildReadOnlyLayoutTile(
+                AppTranslations.translate('japanese_layout', state._displayLanguage),
+                state._isJapaneseEnabled 
+                    ? AppTranslations.translate('keyboard_detected', state._displayLanguage)
+                    : AppTranslations.translate('keyboard_not_detected', state._displayLanguage),
+                state._isJapaneseEnabled,
+              ),
+              Divider(color: state._dividerColor),
+              _buildReadOnlyLayoutTile(
+                AppTranslations.translate('chinese_layout', state._displayLanguage),
+                state._isChineseEnabled 
+                    ? AppTranslations.translate('keyboard_detected', state._displayLanguage)
+                    : AppTranslations.translate('keyboard_not_detected', state._displayLanguage),
+                state._isChineseEnabled,
+              ),
+            ] else ...[
+              Divider(color: state._dividerColor),
+              _buildSwitchTile(
+                AppTranslations.translate('enable_korean', state._displayLanguage),
+                AppTranslations.translate('enable_korean_desc', state._displayLanguage),
+                state._isKoreanEnabled,
+                (val) {
+                  state.updateState(() {
+                    state._isKoreanEnabled = val;
+                    state._saveSetting('isKoreanEnabled', val);
+                    AutocorrectEngine.isKoreanEnabled = val;
+                  });
+                },
+              ),
+              Divider(color: state._dividerColor),
+              _buildSwitchTile(
+                AppTranslations.translate('enable_japanese', state._displayLanguage),
+                AppTranslations.translate('enable_japanese_desc', state._displayLanguage),
+                state._isJapaneseEnabled,
+                (val) {
+                  state.updateState(() {
+                    state._isJapaneseEnabled = val;
+                    state._saveSetting('isJapaneseEnabled', val);
+                    AutocorrectEngine.isJapaneseEnabled = val;
+                  });
+                },
+              ),
+              Divider(color: state._dividerColor),
+              _buildSwitchTile(
+                AppTranslations.translate('enable_chinese', state._displayLanguage),
+                AppTranslations.translate('enable_chinese_desc', state._displayLanguage),
+                state._isChineseEnabled,
+                (val) {
+                  state.updateState(() {
+                    state._isChineseEnabled = val;
+                    state._saveSetting('isChineseEnabled', val);
+                    AutocorrectEngine.isChineseEnabled = val;
+                  });
+                },
+              ),
+            ]
+          ]),
+          
+          const SizedBox(height: 20),
+
           _buildSettingsBlock(AppTranslations.translate('appearance_group', state._displayLanguage), [
             _buildSwitchTile(
               AppTranslations.translate('dark_mode', state._displayLanguage),
@@ -317,6 +400,75 @@ class SettingsTab extends StatelessWidget {
           const SizedBox(height: 20),
 
           _buildSettingsBlock(AppTranslations.translate('engine_group', state._displayLanguage), [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppTranslations.translate('correction_mode_title', state._displayLanguage),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    AppTranslations.translate('correction_mode_desc', state._displayLanguage),
+                    style: TextStyle(fontSize: 11, color: state._textColorSecondary),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: state._correctionMode,
+                    style: TextStyle(fontSize: 13, color: state._textColorPrimary),
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      filled: true,
+                      fillColor: state._surfaceColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: state._borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: state._borderColor),
+                      ),
+                    ),
+                    dropdownColor: state._isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                    items: [
+                      DropdownMenuItem(
+                        value: 'regex',
+                        child: Text(
+                          AppTranslations.translate('mode_regex', state._displayLanguage),
+                          style: TextStyle(fontSize: 13, color: state._textColorPrimary),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'ai',
+                        child: Text(
+                          AppTranslations.translate('mode_ai', state._displayLanguage),
+                          style: TextStyle(fontSize: 13, color: state._textColorPrimary),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'hybrid',
+                        child: Text(
+                          AppTranslations.translate('mode_hybrid', state._displayLanguage),
+                          style: TextStyle(fontSize: 13, color: state._textColorPrimary),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        state.updateState(() {
+                          state._correctionMode = val;
+                          state._saveSetting('correctionMode', val);
+                          AutocorrectEngine.correctionMode = val;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Divider(color: state._dividerColor),
             _buildSwitchTile(
               AppTranslations.translate('fast_local_engine', state._displayLanguage),
               AppTranslations.translate('fast_local_engine_desc', state._displayLanguage),
@@ -546,6 +698,31 @@ class SettingsTab extends StatelessWidget {
                 ),
               ),
             ],
+            Divider(color: state._dividerColor),
+            _buildSwitchTile(
+              AppTranslations.translate('enable_slash_commands', state._displayLanguage),
+              AppTranslations.translate('enable_slash_commands_desc', state._displayLanguage),
+              state._useSlashCommands,
+              (val) {
+                state.updateState(() {
+                  state._useSlashCommands = val;
+                  state._saveSetting('useSlashCommands', val);
+                });
+              },
+            ),
+            Divider(color: state._dividerColor),
+            _buildSwitchTile(
+              AppTranslations.translate('settings_code_filter_title', state._displayLanguage),
+              AppTranslations.translate('settings_code_filter_desc', state._displayLanguage),
+              state._useCodeFilter,
+              (val) {
+                state.updateState(() {
+                  state._useCodeFilter = val;
+                  state._saveSetting('useCodeFilter', val);
+                  AutocorrectEngine.isCodeFilterEnabled = val;
+                });
+              },
+            ),
           ]),
           
           const SizedBox(height: 20),
@@ -688,11 +865,12 @@ class SettingsTab extends StatelessWidget {
             ),
           ),
         ),
-        Container(
-          decoration: BoxDecoration(
-            color: state._surfaceColor,
+        Material(
+          color: state._surfaceColor,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: state._borderColor),
+            side: BorderSide(color: state._borderColor),
           ),
           child: Column(children: children),
         ),
@@ -707,6 +885,29 @@ class SettingsTab extends StatelessWidget {
       title: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: state._textColorPrimary)),
       subtitle: Text(desc, style: TextStyle(fontSize: 11, color: state._textColorSecondary)),
       activeColor: Theme.of(state.context).colorScheme.primary,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    );
+  }
+
+  Widget _buildReadOnlyLayoutTile(String title, String desc, bool isEnabled) {
+    return ListTile(
+      title: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: state._textColorPrimary)),
+      subtitle: Text(desc, style: TextStyle(fontSize: 11, color: isEnabled ? Colors.green : state._textColorSecondary)),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isEnabled ? Colors.green.withOpacity(0.1) : state._borderColor,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          isEnabled ? "Active" : "Inactive",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: isEnabled ? Colors.green : state._textColorSecondary,
+          ),
+        ),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }

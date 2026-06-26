@@ -18,12 +18,13 @@ class KoreanMapper implements LanguageMapper {
 
   static final Map<String, String> _koToEnMap = _enToKoMap.map((k, v) => MapEntry(v, k));
 
-  // Common Korean words for pattern verification fallback
+  // Common Korean words in raw Jamo for pattern verification fallback
   static const Set<String> _commonKoWords = {
-    '안녕하세요', '감사합니다', '고맙습니다', '죄송합니다', '미안합니다', '네', '아니요', '저기요',
-    '사람', '우리', '나라', '친구', '사랑', '생각', '오늘', '내일', '어제', '지금', '시간',
-    '하고', '그리고', '하지만', '그래서', '진짜', '정말', '매우', '아주', '조금', '많이',
-    '프로그램', '코드', '컴퓨터', '웹사이트', '애플리케이션', '데이터', '서버', '클라이언트',
+    'ㅇㅏㄴㄴㅕㅇㅎㅏㅅㅔㅇㅛ', 'ㄱㅏㅁㅅㅏㅎㅏㅂㄴㅣㄷㅏ', 'ㄱㅗㅁㅏㅂㅅㅡㅂㄴㅣㄷㅏ', 'ㅈㅗㅣㅅㅗㅇㅎㅏㅂㄴㅣㄷㅏ', 'ㅁㅣㅇㅏㄴㅎㅏㅂㄴㅣㄷㅏ', 'ㄴㅔ', 'ㅇㅏㄴㅣㅇㅛ', 'ㅈㅓㄱㅣㅇㅛ',
+    'ㅅㅏㄹㅏㅁ', 'ㅇㅜㄹㅣ', 'ㄴㅏㄹㅏ', 'ㅊㅣㄴㄱㅜ', 'ㅅㅏㄹㅏㅇ', 'ㅅㅐㅇㄱㅏㄱ', 'ㅇㅗㄴㅡㄹ', 'ㄴㅐㅇㅣㄹ', 'ㅇㅓㅈㅔ', 'ㅈㅣㄱㅡㅁ', 'ㅅㅣㄱㅏㄴ',
+    'ㅎㅏㄱㅗ', 'ㄱㅡㄹㅣㄱㅗ', 'ㅎㅏㅈㅣㅁㅏㄴ', 'ㄱㅡㄹㅐㅅㅓ', 'ㅈㅣㄴㅉㅏ', 'ㅈㅓㅇㅁㅏㄹ', 'ㅁㅐㅇㅜ', 'ㅇㅏㅈㅜ', 'ㅈㅗㄱㅡㅁ', 'ㅁㅏㄴㅎㅇㅣ',
+    'ㅍㅡㄹㅗㄱㅡㄹㅐㅁ', 'ㅋㅗㄷㅡ', 'ㅋㅓㅁㅍㅠㅌㅓ', 'ㅇㅜㅔㅂㅅㅏㅇㅣㅌㅡ', 'ㅇㅐㅍㅡㄹㄹㅣㅋㅔㅇㅣㅅㅕㄴ', 'ㄷㅔㅇㅣㅌㅓ', 'ㅅㅓㅂㅓ', 'ㅋㅡㄹㄹㅏㅇㅣㅇㅓㄴㅌㅡ',
+    'ㅇㅏㄴㄴㅕㅇ'
   };
 
   @override
@@ -49,18 +50,28 @@ class KoreanMapper implements LanguageMapper {
   @override
   bool isValidPattern(String text) {
     if (text.isEmpty) return false;
-    // Check if it contains Hangul letters or syllables
+    
+    // If it contains combined Hangul syllables, check if it's fully Hangul
+    if (RegExp(r'[\uac00-\ud7af]').hasMatch(text)) {
+      return RegExp(r'^[ㄱ-ㅎㅏ-ㅣ\uac00-\ud7af]+$').hasMatch(text);
+    }
+    
     for (final word in _commonKoWords) {
       if (text.contains(word)) return true;
     }
-    return RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]').hasMatch(text);
+    
+    // Allow common repeating slang/emoticons
+    if (RegExp(r'^(ㅋ{2,}|ㅎ{2,}|ㅠ{2,}|ㅜ{2,}|ㅇ{2,}|ㄴ{2,}|ㅂ{2,}|ㅃ{2,}|ㄷ{2,}|ㅈ{2,}|ㅅ{2,}|ㅊ{2,})$').hasMatch(text)) {
+      return true;
+    }
+    
+    // For raw Jamo, enforce valid syllable structure: (C+ V{1,2} C{0,2})+
+    return RegExp(r'^([ㄱ-ㅎ]+[ㅏ-ㅣ]{1,2}[ㄱ-ㅎ]{0,2})+$').hasMatch(text);
   }
 
   @override
   bool isValidPatternStrict(String text, String originalEnText) {
-    if (text.isEmpty) return false;
-    // Must be fully Hangul characters
-    return RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣\d\s\p{P}]+$', unicode: true).hasMatch(text);
+    return isValidPattern(text);
   }
 
   @override
