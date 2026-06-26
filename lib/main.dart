@@ -1412,13 +1412,26 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           
           if (isValid) {
             backspaces += 1;
+            // If the cluster contains SARA AM ('ำ'), macOS requires 2 extra backspaces
+            // (1 for the consonant, 2 for the separate parts 'ํ' and 'า' of SARA AM)
+            if (marks.contains('ำ')) {
+              backspaces += 2;
+            }
           } else {
             backspaces += 1 + marks.length;
+            // In an invalid stack, we count character by character.
+            // SARA AM ('ำ') occupies 1 char in marks but needs 2 deletes on macOS,
+            // so we add 1 extra backspace for each SARA AM in marks.
+            final saraAmCount = marks.where((m) => m == 'ำ').length;
+            backspaces += saraAmCount;
           }
         }
         i = j;
       } else if (combiningReg.hasMatch(char)) {
         backspaces += 1;
+        if (char == 'ำ') {
+          backspaces += 1; // Isolated SARA AM requires 2 backspaces
+        }
         i++;
       } else {
         backspaces += 1;

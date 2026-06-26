@@ -178,6 +178,73 @@ void main() {
     expect(AutocorrectEngine.isValidEnglishWordPattern('hello'), isTrue);
     expect(AutocorrectEngine.isValidEnglishWordPattern('don\'t'), isTrue);
     expect(AutocorrectEngine.isValidEnglishWordPattern('first-class'), isTrue);
+
+    // 21. Test Thai backspace counting logic for SARA AM (ำ)
+    int countPhysicalThaiBackspaces(String text) {
+      if (text.isEmpty) return 0;
+      
+      int backspaces = 0;
+      final consonantReg = RegExp(r'[ก-ฮ]');
+      final combiningReg = RegExp(r'[ิีึืุูั็่้๊๋์ํฺำ]');
+      
+      int i = 0;
+      while (i < text.length) {
+        final char = text[i];
+        
+        if (consonantReg.hasMatch(char)) {
+          int j = i + 1;
+          List<String> marks = [];
+          while (j < text.length && combiningReg.hasMatch(text[j])) {
+            marks.add(text[j]);
+            j++;
+          }
+          
+          if (marks.isEmpty) {
+            backspaces += 1;
+          } else {
+            bool isValid = true;
+            final vowels = marks.where((m) => RegExp(r'[ิีึืุูั็ํำ]').hasMatch(m)).toList();
+            if (vowels.length > 1) isValid = false;
+            
+            final tones = marks.where((m) => RegExp(r'[่้๊๋์]').hasMatch(m)).toList();
+            if (tones.length > 1) isValid = false;
+            
+            if (marks.length >= 2) {
+              final firstIsTone = RegExp(r'[่้๊๋์]').hasMatch(marks[0]);
+              final secondIsVowel = RegExp(r'[ิีึืุูั็ํำ]').hasMatch(marks[1]);
+              if (firstIsTone && secondIsVowel) isValid = false;
+            }
+            
+            if (isValid) {
+              backspaces += 1;
+              if (marks.contains('ำ')) {
+                backspaces += 2;
+              }
+            } else {
+              backspaces += 1 + marks.length;
+              final saraAmCount = marks.where((m) => m == 'ำ').length;
+              backspaces += saraAmCount;
+            }
+          }
+          i = j;
+        } else if (combiningReg.hasMatch(char)) {
+          backspaces += 1;
+          if (char == 'ำ') {
+            backspaces += 1;
+          }
+          i++;
+        } else {
+          backspaces += 1;
+          i++;
+        }
+      }
+      return backspaces;
+    }
+
+    expect(countPhysicalThaiBackspaces('อำ'), equals(3));
+    expect(countPhysicalThaiBackspaces('ทำ'), equals(3));
+    expect(countPhysicalThaiBackspaces('ย่ำ'), equals(4));
+    expect(countPhysicalThaiBackspaces('อำพหณนย'), equals(8));
   });
 }
 
