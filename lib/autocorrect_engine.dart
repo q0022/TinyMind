@@ -235,7 +235,6 @@ class AutocorrectEngine {
   static CorrectionResult? checkAndCorrectLocal(String word) {
     lastDecisionSource = 'regex';
     if (word.isEmpty || word.length < 2) return null;
-    if (correctionMode == 'ai') return null; // AI mode bypasses local dict to let Alibaba Qwen decide
 
     // ป้องกันการแปลงหากคำเป็นตัวเลขทศนิยม เวอร์ชัน หรือ IP address (เช่น 1.0, 3.14, .50, v1.0.0)
     if (RegExp(r'^v?\d*\.\d+(\.\d+)*$').hasMatch(word)) {
@@ -370,7 +369,6 @@ class AutocorrectEngine {
   static CorrectionResult? checkAndCorrectLocalStrict(String word) {
     lastDecisionSource = 'regex';
     if (word.isEmpty || word.length < 2) return null;
-    if (correctionMode == 'ai') return null; // AI mode bypasses local dict to let Alibaba Qwen decide
 
     // ป้องกันการแปลงหากคำเป็นตัวเลขทศนิยม เวอร์ชัน หรือ IP address (เช่น 1.0, 3.14, .50, v1.0.0)
     if (RegExp(r'^v?\d*\.\d+(\.\d+)*$').hasMatch(word)) {

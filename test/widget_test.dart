@@ -179,6 +179,12 @@ void main() {
     expect(AutocorrectEngine.isValidEnglishWordPattern('don\'t'), isTrue);
     expect(AutocorrectEngine.isValidEnglishWordPattern('first-class'), isTrue);
 
+    // Test SARA AM version typo local dictionary match
+    final vResult = AutocorrectEngine.checkAndCorrectLocalStrict('อำพหรนื');
+    expect(vResult, isNotNull, reason: 'Expected local dict match for version typo');
+    expect(vResult!.correctedWord, equals('version'));
+    expect(vResult.isToTargetLanguage, isFalse);
+
     // 21. Test Thai backspace counting logic for SARA AM (ำ)
     int countPhysicalThaiBackspaces(String text) {
       if (text.isEmpty) return 0;
