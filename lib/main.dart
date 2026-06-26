@@ -1357,6 +1357,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _syncBufferStatus();
 
     _saveHistory();
+    _addWordToIgnoreList(result.correctedWord);
   }
 
   int _calculateBackspaces(String textToDelete, String replacementText) {
