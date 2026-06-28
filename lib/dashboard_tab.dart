@@ -92,16 +92,22 @@ class DashboardTab extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.keyboard_alt_outlined, color: Colors.blueAccent, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        AppTranslations.translate('sandbox_title', state._displayLanguage),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                    ],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.keyboard_alt_outlined, color: Colors.blueAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            AppTranslations.translate('sandbox_title', state._displayLanguage),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: () {
                       state._resetSandbox();

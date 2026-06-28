@@ -38,8 +38,8 @@ void main() async {
   await windowManager.ensureInitialized();
 
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(900, 620),
-    minimumSize: Size(900, 620),
+    size: Size(900, 900),
+    minimumSize: Size(900, 900),
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
@@ -165,6 +165,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   bool _isKoreanEnabled = false;
   bool _isJapaneseEnabled = false;
   bool _isChineseEnabled = false;
+  String _activeAppMode = 'native';
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
   static const String currentVersion = '1.0.11';
@@ -324,6 +325,15 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           break;
         case 'onEnterTriggered':
           await _handleEnterTriggered();
+          break;
+        case 'updateActiveApp':
+          final args = call.arguments as Map;
+          if (mounted) {
+            setState(() {
+              _activeAppMode = args['appMode'] ?? 'native';
+            });
+          }
+          AppLogger.log("Dart: updateActiveApp - appMode=$_activeAppMode");
           break;
       }
     });
@@ -1131,7 +1141,12 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         _bufferLayouts.add(layout);
       }
       _syncBufferStatus(); // Sync หลังจากต่อ space
+      
+      _mirrorCharToSandbox(char);
     } else {
+      // For printable characters, mirror FIRST so that the sandbox text is updated before continuous autocorrect check is called
+      _mirrorCharToSandbox(char);
+
       // 2. ถ้าเริ่มพิมพ์ตัวอักษรถัดไป ให้ล้างประวัติคำก่อนหน้าที่เคาะวรรคไปแล้ว
       if (_currentBuffer.isNotEmpty) {
         final lastChar = _currentBuffer.substring(_currentBuffer.length - 1);
@@ -1157,8 +1172,9 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _syncBufferStatus(); // Sync
     }
     AppLogger.log("Dart: Buffer state after _handleKeyPress: '$_currentBuffer'");
-    
-    // Global Mirroring for Keyboard Sandbox (Printable character)
+  }
+
+  void _mirrorCharToSandbox(String char) {
     final String currentText = _sandboxController.text;
     final int selOffset = _sandboxController.selection.baseOffset >= 0 
         ? _sandboxController.selection.baseOffset 
@@ -1367,13 +1383,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     // However, if the text contains invalid stacked Thai characters (which occurs during layout typos),
     // macOS/Chromium do not group these invalid parts into grapheme clusters and delete them code point by code point.
     // Thus we compute the precise backspace count to prevent under-deletion.
-    final int backspaces = _countPhysicalThaiBackspaces(textToDelete);
+    final int backspaces = _countPhysicalThaiBackspaces(textToDelete, appMode: _activeAppMode);
     
-    AppLogger.log("Dart: [Backspace Breakdown] \"$textToDelete\" = $backspaces Backspaces (base: $baseClusters)");
+    AppLogger.log("Dart: [Backspace Breakdown] \"$textToDelete\" = $backspaces Backspaces (base: $baseClusters, appMode: $_activeAppMode)");
     return backspaces;
   }
 
-  int _countPhysicalThaiBackspaces(String text) {
+  int _countPhysicalThaiBackspaces(String text, {String appMode = 'native'}) {
     if (text.isEmpty) return 0;
     
     int backspaces = 0;
@@ -1413,31 +1429,34 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           
           if (isValid) {
             backspaces += 1;
-            // If the cluster has a single vowel without any tone marks, macOS deletes it character by character (vowel first, then consonant)
+            // If the cluster has a single vowel without any tone marks, macOS Chromium and Flutter delete it character by character (vowel first, then consonant)
             final hasVowel = marks.any((m) => RegExp(r'[ิีึืุูั็ํ]').hasMatch(m));
             final hasTone = marks.any((m) => RegExp(r'[่้๊๋์]').hasMatch(m));
-            if (hasVowel && !hasTone) {
+            if (hasVowel && !hasTone && (appMode == 'chromium' || appMode == 'flutter')) {
               backspaces += 1;
             }
-            // If the cluster contains SARA AM ('ำ'), macOS requires 2 extra backspaces
-            // (1 for the consonant, 2 for the separate parts 'ํ' and 'า' of SARA AM)
+            // SARA AM ('ำ') requires:
+            // - 3 backspaces total in Chromium (adds 2)
+            // - 2 backspaces total in Flutter and Native modes (adds 1)
             if (marks.contains('ำ')) {
-              backspaces += 2;
+              backspaces += (appMode == 'chromium') ? 2 : 1;
             }
           } else {
             backspaces += 1 + marks.length;
             // In an invalid stack, we count character by character.
-            // SARA AM ('ำ') occupies 1 char in marks but needs 2 deletes on macOS,
-            // so we add 1 extra backspace for each SARA AM in marks.
-            final saraAmCount = marks.where((m) => m == 'ำ').length;
-            backspaces += saraAmCount;
+            // SARA AM ('ำ') occupies 1 char in marks but needs 2 deletes on macOS Chromium,
+            // so we add 1 extra backspace for each SARA AM in marks if running in Chromium.
+            if (appMode == 'chromium') {
+              final saraAmCount = marks.where((m) => m == 'ำ').length;
+              backspaces += saraAmCount;
+            }
           }
         }
         i = j;
       } else if (combiningReg.hasMatch(char)) {
         backspaces += 1;
-        if (char == 'ำ') {
-          backspaces += 1; // Isolated SARA AM requires 2 backspaces
+        if (char == 'ำ' && appMode == 'chromium') {
+          backspaces += 1; // Isolated SARA AM requires 2 backspaces in Chromium
         }
         i++;
       } else {
