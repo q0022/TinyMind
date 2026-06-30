@@ -185,8 +185,8 @@ void main() {
     expect(vResult!.correctedWord, equals('version'));
     expect(vResult.isToTargetLanguage, isFalse);
 
-    // 21. Test Thai backspace counting logic for SARA AM (ำ)
-    int countPhysicalThaiBackspaces(String text) {
+    // 21. Test Thai backspace counting logic for 3 app modes (Chromium, Flutter, Native)
+    int countPhysicalThaiBackspaces(String text, {String appMode = 'native'}) {
       if (text.isEmpty) return 0;
       
       int backspaces = 0;
@@ -223,25 +223,26 @@ void main() {
             
             if (isValid) {
               backspaces += 1;
-              // If the cluster has a single vowel without any tone marks, macOS deletes it character by character (vowel first, then consonant)
               final hasVowel = marks.any((m) => RegExp(r'[ิีึืุูั็ํ]').hasMatch(m));
               final hasTone = marks.any((m) => RegExp(r'[่้๊๋์]').hasMatch(m));
-              if (hasVowel && !hasTone) {
+              if (hasVowel && !hasTone && (appMode == 'chromium' || appMode == 'flutter')) {
                 backspaces += 1;
               }
               if (marks.contains('ำ')) {
-                backspaces += 2;
+                backspaces += (appMode == 'chromium') ? 2 : 1;
               }
             } else {
               backspaces += 1 + marks.length;
-              final saraAmCount = marks.where((m) => m == 'ำ').length;
-              backspaces += saraAmCount;
+              if (appMode == 'chromium') {
+                final saraAmCount = marks.where((m) => m == 'ำ').length;
+                backspaces += saraAmCount;
+              }
             }
           }
           i = j;
         } else if (combiningReg.hasMatch(char)) {
           backspaces += 1;
-          if (char == 'ำ') {
+          if (char == 'ำ' && appMode == 'chromium') {
             backspaces += 1;
           }
           i++;
@@ -253,11 +254,26 @@ void main() {
       return backspaces;
     }
 
-    expect(countPhysicalThaiBackspaces('อำ'), equals(3));
-    expect(countPhysicalThaiBackspaces('ทำ'), equals(3));
-    expect(countPhysicalThaiBackspaces('ย่ำ'), equals(4));
-    expect(countPhysicalThaiBackspaces('อำพหณนย'), equals(8));
-    expect(countPhysicalThaiBackspaces('รืหะพีแะ'), equals(8));
+    // Chromium Deletion Mode Tests
+    expect(countPhysicalThaiBackspaces('อำ', appMode: 'chromium'), equals(3));
+    expect(countPhysicalThaiBackspaces('ทำ', appMode: 'chromium'), equals(3));
+    expect(countPhysicalThaiBackspaces('ย่ำ', appMode: 'chromium'), equals(4));
+    expect(countPhysicalThaiBackspaces('อำพหณนย', appMode: 'chromium'), equals(8));
+    expect(countPhysicalThaiBackspaces('รืหะพีแะ', appMode: 'chromium'), equals(8));
+
+    // Flutter Deletion Mode Tests
+    expect(countPhysicalThaiBackspaces('อำ', appMode: 'flutter'), equals(2));
+    expect(countPhysicalThaiBackspaces('ทำ', appMode: 'flutter'), equals(2));
+    expect(countPhysicalThaiBackspaces('ย่ำ', appMode: 'flutter'), equals(3));
+    expect(countPhysicalThaiBackspaces('อำพหณนย', appMode: 'flutter'), equals(7)); // ดสีะะำพ (flutter) typo mapping
+    expect(countPhysicalThaiBackspaces('รืหะพีแะ', appMode: 'flutter'), equals(8)); // single vowel 'รื' & 'พี' takes 2 backspaces each in Flutter
+
+    // Native macOS Deletion Mode Tests
+    expect(countPhysicalThaiBackspaces('อำ', appMode: 'native'), equals(2));
+    expect(countPhysicalThaiBackspaces('ทำ', appMode: 'native'), equals(2));
+    expect(countPhysicalThaiBackspaces('ย่ำ', appMode: 'native'), equals(3));
+    expect(countPhysicalThaiBackspaces('อำพหณนย', appMode: 'native'), equals(7));
+    expect(countPhysicalThaiBackspaces('รืหะพีแะ', appMode: 'native'), equals(6));
   });
 }
 

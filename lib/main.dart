@@ -333,7 +333,9 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
               _activeAppMode = args['appMode'] ?? 'native';
             });
           }
-          AppLogger.log("Dart: updateActiveApp - appMode=$_activeAppMode");
+          _clearBuffers();
+          await _syncBufferStatus();
+          AppLogger.log("Dart: updateActiveApp - appMode=$_activeAppMode, buffers cleared");
           break;
       }
     });

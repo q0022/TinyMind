@@ -16,6 +16,7 @@ class AppDelegate: FlutterAppDelegate {
     // Enter Block Control for AI
     var needsAutocorrect: Bool = false
     var isReplacingText: Bool = false
+    var activeAppBundleID: String = ""
     
     override func applicationDidFinishLaunching(_ notification: Notification) {
         print("AppDelegate: applicationDidFinishLaunching starting...")
@@ -48,6 +49,25 @@ class AppDelegate: FlutterAppDelegate {
                     setupMethodChannelHandler()
                     break
                 }
+            }
+        }
+        // Observe active application changes to notify Dart about Chromium vs Native layout
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(activeAppChanged(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+        
+        // Notify Dart of initial active application after a short delay to let channel setup complete
+        if let activeApp = NSWorkspace.shared.frontmostApplication,
+           let bundleID = activeApp.bundleIdentifier {
+            self.activeAppBundleID = bundleID
+            let appMode = getAppMode(bundleID: bundleID)
+            print("AppDelegate: initial active app - bundleID=\(bundleID), appMode=\(appMode)")
+            fflush(stdout)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.channel?.invokeMethod("updateActiveApp", arguments: ["appMode": appMode])
             }
         }
         
@@ -271,6 +291,12 @@ class AppDelegate: FlutterAppDelegate {
     func handleKeyEvent(_ event: CGEvent) -> CGEvent? {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
+        
+        // Skip layout monitoring for ignored launcher apps
+        let appMode = getAppMode(bundleID: activeAppBundleID)
+        if appMode == "ignored" {
+            return event
+        }
         
         // 0. ดักจับและบล็อก Enter สำหรับ AI Autocorrection
         if keyCode == 36 || keyCode == 76 { // Return / Enter
@@ -531,6 +557,60 @@ class AppDelegate: FlutterAppDelegate {
             return ["en", "th"]
         }
         return Array(languagesList)
+    }
+
+    @objc private func activeAppChanged(_ notification: Notification) {
+        if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+           let bundleID = app.bundleIdentifier {
+            self.activeAppBundleID = bundleID
+            let appMode = getAppMode(bundleID: bundleID)
+            print("AppDelegate: activeAppChanged - bundleID=\(bundleID), appMode=\(appMode)")
+            fflush(stdout)
+            channel?.invokeMethod("updateActiveApp", arguments: ["appMode": appMode])
+        }
+    }
+
+    private func getAppMode(bundleID: String) -> String {
+        let ignoredBundleIDs = [
+            "com.runningwithcrayons.alfred",
+            "com.raycast.macos",
+            "com.apple.spotlight"
+        ]
+        if ignoredBundleIDs.contains(where: { bundleID.lowercased().contains($0) }) {
+            return "ignored"
+        }
+        
+        let chromiumBundleIDs = [
+            "com.google.chrome",
+            "com.microsoft.vscode",
+            "com.tinyspeck.slackmacgap",
+            "com.hnc.discord",
+            "com.spotify.client",
+            "org.chromium.chromium",
+            "com.brave.browser",
+            "com.operasoftware.opera",
+            "com.microsoft.edge",
+            "company.thebrowser.browser",
+            "electron",
+            "notion",
+            "obsidian",
+            "teams"
+        ]
+        let flutterBundleIDs = [
+            "com.tinymind.tinymind",
+            "com.google.antigravity",
+            "firefox",
+            "mozilla",
+            "zen-browser"
+        ]
+        
+        if chromiumBundleIDs.contains(where: { bundleID.lowercased().contains($0) }) {
+            return "chromium"
+        } else if flutterBundleIDs.contains(where: { bundleID.lowercased().contains($0) }) {
+            return "flutter"
+        } else {
+            return "native"
+        }
     }
 }
 

@@ -469,6 +469,15 @@ class AutocorrectEngine {
     if (!isCodeFilterEnabled) return false;
     if (word.isEmpty) return false;
 
+    // 0. Bypass URLs, Domains, and Emails immediately
+    // e.g., google.com, www.google.com, tinymind.app, boy@tinymind.com
+    final emailRegExp = RegExp(r'^[a-zA-Z\d._%+-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$', caseSensitive: false);
+    const tldPattern = r'(com|net|org|io|co|th|edu|gov|mil|app|me|ai|xyz|info|biz|cc|tv|so|fm|dev|link|online|site|tech|web|us|uk|jp|cn|tw|sg|hk)';
+    final domainRegExp = RegExp('^(www\\.)?([a-zA-Z\\d-]+\\.)+$tldPattern(/\\S*)?\$', caseSensitive: false);
+    if (emailRegExp.hasMatch(word) || domainRegExp.hasMatch(word)) {
+      return true;
+    }
+
     bool matchesBypass = false;
 
     // 1. ถ้ามีสัญลักษณ์โปรแกรมมิ่ง/ระบบ/พาธ/ลิงก์ (ยกเว้น . , - และเครื่องหมายวรรคตอนทั่วไป)
