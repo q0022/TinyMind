@@ -1441,14 +1441,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
             // - 3 backspaces total in Chromium (adds 2)
             // - 2 backspaces total in Flutter and Native modes (adds 1)
             if (marks.contains('ำ')) {
-              backspaces += (appMode == 'chromium') ? 2 : 1;
+              backspaces += (appMode == 'chromium' || appMode == 'native') ? 2 : 1;
             }
           } else {
             backspaces += 1 + marks.length;
             // In an invalid stack, we count character by character.
-            // SARA AM ('ำ') occupies 1 char in marks but needs 2 deletes on macOS Chromium,
-            // so we add 1 extra backspace for each SARA AM in marks if running in Chromium.
-            if (appMode == 'chromium') {
+            // SARA AM ('ำ') occupies 1 char in marks but needs 2 deletes on macOS Chromium/Native,
+            // so we add 1 extra backspace for each SARA AM in marks if running in Chromium/Native.
+            if (appMode == 'chromium' || appMode == 'native') {
               final saraAmCount = marks.where((m) => m == 'ำ').length;
               backspaces += saraAmCount;
             }
@@ -1457,8 +1457,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         i = j;
       } else if (combiningReg.hasMatch(char)) {
         backspaces += 1;
-        if (char == 'ำ' && appMode == 'chromium') {
-          backspaces += 1; // Isolated SARA AM requires 2 backspaces in Chromium
+        if (char == 'ำ' && (appMode == 'chromium' || appMode == 'native')) {
+          backspaces += 1; // Isolated SARA AM requires 2 backspaces in Chromium/Native
         }
         i++;
       } else {

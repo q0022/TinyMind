@@ -276,7 +276,7 @@ class AppDelegate: FlutterAppDelegate {
             CGEvent.tapEnable(tap: eventTap, enable: false)
         }
         
-        let source = CGEventSource(stateID: .combinedSessionState)
+        let source = CGEventSource(stateID: .privateState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: true) // 0x24 is Return
         let up = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: false)
         
@@ -448,27 +448,37 @@ class AppDelegate: FlutterAppDelegate {
         
         if let eventTap = eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
-            usleep(1000) // Allow OS to complete the event tap transition
+            usleep(5000) // Allow OS to complete the event tap transition
         }
         
-        let source = CGEventSource(stateID: .combinedSessionState)
+        var finalBackspaces = backspaces
+        let isThai = isCurrentLayoutThai()
+        let appMode = getAppMode(bundleID: activeAppBundleID)
+        if isThai && (appMode == "native" || appMode == "ignored") && backspaces > 0 {
+            print("AppDelegate: replaceText: Thai layout detected in native/launcher app \(activeAppBundleID). Adding 1 extra backspace for IME swallow.")
+            finalBackspaces += 1
+        }
         
-        if backspaces > 0 {
-            print("AppDelegate: replaceText: Sending \(backspaces) Backspace events...")
+        let source = CGEventSource(stateID: .privateState)
+        
+        if finalBackspaces > 0 {
+            print("AppDelegate: replaceText: Sending \(finalBackspaces) Backspace events...")
             fflush(stdout)
-            for _ in 0..<backspaces {
+            for _ in 0..<finalBackspaces {
                 let down = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: true)
                 let up = CGEvent(keyboardEventSource: source, virtualKey: 0x33, keyDown: false)
                 down?.flags = []
                 up?.flags = []
                 down?.post(tap: .cghidEventTap)
-                usleep(500)
+                usleep(1000)
                 up?.post(tap: .cghidEventTap)
-                usleep(500)
+                usleep(1000)
             }
+            usleep(2000) // Allow backspaces to process completely
         }
         
         switchKeyboardLayout(to: targetLang)
+        usleep(2000) // Allow layout transition to settle before typing
         
         let utf16Chars = Array(text.utf16)
         print("AppDelegate: replaceText: Typing Unicode string '\(text)' with \(utf16Chars.count) UTF-16 code units...")
@@ -611,6 +621,17 @@ class AppDelegate: FlutterAppDelegate {
         } else {
             return "native"
         }
+    }
+    
+    private func isCurrentLayoutThai() -> Bool {
+        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
+            return false
+        }
+        guard let langPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages) else {
+            return false
+        }
+        let languages = Unmanaged<CFArray>.fromOpaque(langPtr).takeUnretainedValue() as? [String] ?? []
+        return languages.contains(where: { $0.hasPrefix("th") })
     }
 }
 
