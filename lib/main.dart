@@ -263,6 +263,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   final SystemTray _systemTray = SystemTray();
 
+  static const int _maxHistoryLimit = 50;
+
   // ประวัติการแก้ไขคำผิดล่าสุด
   List<Map<String, String>> _recentCorrections = [];
 
@@ -296,7 +298,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           'timestamp': DateTime.now().toString().substring(11, 19),
           'type': type,
         });
-        if (_recentCorrections.length > 5) {
+        if (_recentCorrections.length > _maxHistoryLimit) {
           _recentCorrections.removeLast();
         }
       });
@@ -1363,7 +1365,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           'timestamp': DateTime.now().toString().substring(11, 19),
           'type': source == 'ai' ? 'Local AI' : 'Layout (Auto)'
         });
-        if (_recentCorrections.length > 5) {
+        if (_recentCorrections.length > _maxHistoryLimit) {
           _recentCorrections.removeLast();
         }
       });
@@ -1776,7 +1778,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           'timestamp': DateTime.now().toString().substring(11, 19),
           'type': source == 'ai' ? 'Local AI' : (result.isToTargetLanguage ? 'Th Layout' : 'En Layout')
         });
-        if (_recentCorrections.length > 5) {
+        if (_recentCorrections.length > _maxHistoryLimit) {
           _recentCorrections.removeLast();
         }
       });
@@ -1810,7 +1812,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           'timestamp': DateTime.now().toString().substring(11, 19),
           'type': 'Shortcut'
         });
-        if (_recentCorrections.length > 5) {
+        if (_recentCorrections.length > _maxHistoryLimit) {
           _recentCorrections.removeLast();
         }
       });
@@ -2135,7 +2137,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           'timestamp': DateTime.now().toString().substring(11, 19),
           'type': source == 'ai' ? 'Local AI' : 'Layout (Auto)'
         });
-        if (_recentCorrections.length > 5) {
+        if (_recentCorrections.length > _maxHistoryLimit) {
           _recentCorrections.removeLast();
         }
       });
