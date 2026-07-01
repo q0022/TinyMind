@@ -1956,6 +1956,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         }
         
         _addWordToIgnoreList(original);
+        _removeWordFromIgnoreList(corrected);
+        setState(() {
+          _recentCorrections.removeWhere((item) => item['original'] == original && item['corrected'] == corrected);
+        });
+        _saveHistory();
         return;
       }
       
@@ -1985,6 +1990,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         // บันทึกคำทั้งสองเวอร์ชันลง Ignore list
         _addWordToIgnoreList(original);
         _addWordToIgnoreList(replacement);
+        _removeWordFromIgnoreList(corrected);
+        setState(() {
+          _recentCorrections.removeWhere((item) => item['original'] == original && item['corrected'] == corrected);
+        });
+        _saveHistory();
         return;
       }
     }
@@ -2101,6 +2111,27 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       });
       await _saveSetting('ignoredWords', _ignoredWords);
       AppLogger.log("Dart: Auto-added word to ignore list (dict) via hotkey: '$lowerWord'");
+    }
+  }
+
+  // ลบคำศัพท์ออกจากรายการละเว้น (Ignore list / dict) เมื่อทำ Undo
+  Future<void> _removeWordFromIgnoreList(String word) async {
+    final lowerWord = word.trim().toLowerCase();
+    if (lowerWord.isEmpty) return;
+
+    if (AutocorrectEngine.userEnWords.contains(lowerWord)) {
+      AutocorrectEngine.userEnWords.remove(lowerWord);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('userEnWords', AutocorrectEngine.userEnWords.toList());
+      AppLogger.log("Dart: Removed English word from user dictionary: '$lowerWord'");
+    }
+
+    if (_ignoredWords.contains(lowerWord)) {
+      setState(() {
+        _ignoredWords.remove(lowerWord);
+      });
+      await _saveSetting('ignoredWords', _ignoredWords);
+      AppLogger.log("Dart: Auto-removed word from ignore list (dict) due to undo: '$lowerWord'");
     }
   }
 
