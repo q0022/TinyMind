@@ -255,6 +255,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   final List<SlashCommand> _slashCommands = [TranslateShortCommand(), TranslateCommand()];
   String _fullSentenceBuffer = '';
   Timer? _debounceTimer;
+  Timer? _typingTimer;
   Map<String, String>? _lastReplacement;
   String _lastReplacementEndingChar = '';
   bool _canUndo = false;
@@ -511,6 +512,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   void dispose() {
     windowManager.removeListener(this);
     _debounceTimer?.cancel();
+    _typingTimer?.cancel();
     _ignoreWordController.dispose();
     _sandboxController.dispose();
     _sandboxFocusNode.dispose();
@@ -1137,6 +1139,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
     // 1. ถ้าพิมพ์ space, enter หรือ tab ถือว่าจบบทคำปัจจุบัน
     if (char == ' ' || char == '\n' || char == '\r' || char == '\t') {
+      _typingTimer?.cancel();
       if (char == '\n' || char == '\r' || char == '\t') {
         // หากกด Enter/Return หรือ Tab ให้เคลียร์บัฟเฟอร์ทันทีและไม่ทำการแก้ไข เพื่อป้องกันปัญหา Autocomplete ใน Terminal/Editor
         _clearBuffers();
@@ -1185,6 +1188,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         }
       }
       _syncBufferStatus(); // Sync
+      _resetTypingTimer();
     }
     AppLogger.log("Dart: Buffer state after _handleKeyPress: '$_currentBuffer'");
   }
@@ -1680,6 +1684,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _slashBuffer = _slashBuffer.characters.skipLast(1).toString();
     }
     _syncBufferStatus(); // Sync
+    if (_currentBuffer.isNotEmpty) {
+      _resetTypingTimer();
+    } else {
+      _typingTimer?.cancel();
+    }
     
     // Global Mirroring for Keyboard Sandbox (Backspace)
     final String currentText = _sandboxController.text;
@@ -1702,6 +1711,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   void _clearBuffers() {
+    _typingTimer?.cancel();
     _currentBuffer = '';
     _bufferLayouts.clear();
     _slashBuffer = '';
@@ -2144,6 +2154,20 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       await _saveSetting('ignoredWords', _ignoredWords);
       AppLogger.log("Dart: Auto-removed word from ignore list (dict) due to undo: '$lowerWord'");
     }
+  }
+
+  void _resetTypingTimer() {
+    _typingTimer?.cancel();
+    if (!_isLocalCorrection) return;
+
+    _typingTimer = Timer(const Duration(milliseconds: 1500), () async {
+      if (_currentBuffer.isNotEmpty && !_isLayoutDecidedForCurrentWord) {
+        if (!_isSlashTriggerOrPrefix(_currentBuffer)) {
+          AppLogger.log("Dart: Typing idle timeout triggered. Auto-correcting buffer: '$_currentBuffer'");
+          await _processWordCorrection(_currentBuffer, '');
+        }
+      }
+    });
   }
 
   Future<void> _saveShortcuts() async {
