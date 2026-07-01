@@ -747,7 +747,7 @@ class SettingsTab extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          "v${_MainDashboardState.currentVersion}",
+                          "v${state._currentVersion}",
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,

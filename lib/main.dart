@@ -11,6 +11,7 @@ import 'package:file_picker/file_picker.dart' as fp;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:auto_updater/auto_updater.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'autocorrect_engine.dart';
 import 'commands/slash_command.dart';
 import 'language_mapper.dart';
@@ -168,7 +169,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   String _activeAppMode = 'native';
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.11';
+  String _currentVersion = '1.0.21'; // Fallback version
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
@@ -370,6 +371,16 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   Future<void> _initApp() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        _currentVersion = packageInfo.version;
+      });
+      AppLogger.log("Dart: Loaded dynamic version string from pubspec.yaml: '$_currentVersion'");
+    } catch (e) {
+      AppLogger.log("Dart: Failed to load dynamic version string: $e");
+    }
+
     await _loadSettings();
     await _updateActiveKeyboards();
     await _initSystemTray();
@@ -390,7 +401,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         final String tag = data['tag_name'] ?? '';
         final String url = data['html_url'] ?? '';
 
-        if (_isNewerVersion(currentVersion, tag)) {
+        if (_isNewerVersion(_currentVersion, tag)) {
           setState(() {
             _isUpdateAvailable = true;
             _latestVersion = tag.replaceAll('v', '').trim();
@@ -398,7 +409,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           });
           AppLogger.log("TinyMind Update: New version $_latestVersion available at $url");
         } else {
-          AppLogger.log("TinyMind Update: App is up to date (current: $currentVersion, latest: $tag)");
+          AppLogger.log("TinyMind Update: App is up to date (current: $_currentVersion, latest: $tag)");
         }
       }
     } catch (e) {
@@ -423,7 +434,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         final String tag = data['tag_name'] ?? '';
         final String url = data['html_url'] ?? '';
 
-        if (_isNewerVersion(currentVersion, tag)) {
+        if (_isNewerVersion(_currentVersion, tag)) {
           setState(() {
             _isUpdateAvailable = true;
             _latestVersion = tag.replaceAll('v', '').trim();
@@ -2457,7 +2468,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
             child: Text(
-              "v$currentVersion",
+              "v$_currentVersion",
               style: TextStyle(
                 fontSize: 10,
                 color: _isDark ? Colors.white30 : Colors.black38,
