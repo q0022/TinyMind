@@ -1431,24 +1431,24 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           
           if (isValid) {
             backspaces += 1;
-            // If the cluster has a single vowel without any tone marks, macOS Chromium and Flutter delete it character by character (vowel first, then consonant)
+            // If the cluster has a single vowel without any tone marks, Flutter Sandbox deletes it character by character (vowel first, then consonant)
             final hasVowel = marks.any((m) => RegExp(r'[ิีึืุูั็ํ]').hasMatch(m));
             final hasTone = marks.any((m) => RegExp(r'[่้๊๋์]').hasMatch(m));
-            if (hasVowel && !hasTone && (appMode == 'chromium' || appMode == 'flutter')) {
+            if (hasVowel && !hasTone && appMode == 'flutter') {
               backspaces += 1;
             }
             // SARA AM ('ำ') requires:
-            // - 3 backspaces total in Chromium (adds 2)
-            // - 2 backspaces total in Flutter and Native modes (adds 1)
+            // - 3 backspaces total in Native (adds 2)
+            // - 2 backspaces total in Chromium and Flutter (adds 1)
             if (marks.contains('ำ')) {
-              backspaces += (appMode == 'chromium' || appMode == 'native') ? 2 : 1;
+              backspaces += (appMode == 'native') ? 2 : 1;
             }
           } else {
             backspaces += 1 + marks.length;
             // In an invalid stack, we count character by character.
-            // SARA AM ('ำ') occupies 1 char in marks but needs 2 deletes on macOS Chromium/Native,
-            // so we add 1 extra backspace for each SARA AM in marks if running in Chromium/Native.
-            if (appMode == 'chromium' || appMode == 'native') {
+            // SARA AM ('ำ') occupies 1 char in marks but needs 2 deletes on macOS Native,
+            // so we add 1 extra backspace for each SARA AM in marks if running in Native.
+            if (appMode == 'native') {
               final saraAmCount = marks.where((m) => m == 'ำ').length;
               backspaces += saraAmCount;
             }
@@ -1457,8 +1457,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         i = j;
       } else if (combiningReg.hasMatch(char)) {
         backspaces += 1;
-        if (char == 'ำ' && (appMode == 'chromium' || appMode == 'native')) {
-          backspaces += 1; // Isolated SARA AM requires 2 backspaces in Chromium/Native
+        if (char == 'ำ' && appMode == 'native') {
+          backspaces += 1; // Isolated SARA AM requires 2 backspaces in Native
         }
         i++;
       } else {

@@ -604,7 +604,9 @@ class AppDelegate: FlutterAppDelegate {
             "electron",
             "notion",
             "obsidian",
-            "teams"
+            "teams",
+            "line",
+            "pgadmin"
         ]
         let flutterBundleIDs = [
             "com.tinymind.tinymind",
