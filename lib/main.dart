@@ -11,6 +11,7 @@ import 'package:file_picker/file_picker.dart' as fp;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:auto_updater/auto_updater.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'autocorrect_engine.dart';
 import 'commands/slash_command.dart';
 import 'language_mapper.dart';
@@ -168,7 +169,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   String _activeAppMode = 'native';
 
   // ข้อมูลเวอร์ชันแอปและการตรวจเช็คอัปเดต
-  static const String currentVersion = '1.0.11';
+  static String currentVersion = '';
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _latestReleaseUrl = '';
@@ -368,6 +369,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
   }
 
   Future<void> _initApp() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      currentVersion = packageInfo.version;
+    });
+    
     await _loadSettings();
     await _updateActiveKeyboards();
     await _initSystemTray();
@@ -1393,6 +1399,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   int _countPhysicalThaiBackspaces(String text, {String appMode = 'native'}) {
     if (text.isEmpty) return 0;
+    
+    // สำหรับ Terminal (Zsh/Bash) จะลบอักขระทีละ 1 Code Point เสมอ
+    if (appMode == 'terminal') {
+      return text.length; 
+    }
     
     int backspaces = 0;
     final consonantReg = RegExp(r'[ก-ฮ]');

@@ -606,7 +606,8 @@ class AppDelegate: FlutterAppDelegate {
             "obsidian",
             "teams",
             "line",
-            "pgadmin"
+            "pgadmin",
+            "gemini"
         ]
         let flutterBundleIDs = [
             "com.tinymind.tinymind",
@@ -615,11 +616,21 @@ class AppDelegate: FlutterAppDelegate {
             "mozilla",
             "zen-browser"
         ]
+        let terminalBundleIDs = [
+            "com.apple.terminal",
+            "com.googlecode.iterm2",
+            "com.warp.warp",
+            "org.alacritty",
+            "net.kovidgoyal.kitty",
+            "com.mitchellh.ghostty"
+        ]
         
         if chromiumBundleIDs.contains(where: { bundleID.lowercased().contains($0) }) {
             return "chromium"
         } else if flutterBundleIDs.contains(where: { bundleID.lowercased().contains($0) }) {
             return "flutter"
+        } else if terminalBundleIDs.contains(where: { bundleID.lowercased().contains($0) }) {
+            return "terminal"
         } else {
             return "native"
         }
