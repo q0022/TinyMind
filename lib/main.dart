@@ -1964,6 +1964,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           _fullSentenceBuffer = _fullSentenceBuffer.substring(0, _fullSentenceBuffer.length - (corrected.length + _lastReplacementEndingChar.length));
         }
         
+        _removeWordFromIgnoreList(corrected);
         _addWordToIgnoreList(original);
         return;
       }
@@ -1991,7 +1992,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         _lastReplacement = null;
         _canUndo = false;
         
-        // บันทึกคำทั้งสองเวอร์ชันลง Ignore list
+        // ลบคำที่สลับผิดออกจาก Ignore list และบันทึกคำที่ถูกต้องแทน
+        _removeWordFromIgnoreList(corrected);
         _addWordToIgnoreList(original);
         _addWordToIgnoreList(replacement);
         return;
@@ -2110,6 +2112,33 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       });
       await _saveSetting('ignoredWords', _ignoredWords);
       AppLogger.log("Dart: Auto-added word to ignore list (dict) via hotkey: '$lowerWord'");
+    }
+  }
+
+  // ลบคำศัพท์ออกจากรายการละเว้น (เมื่อแอปสลับผิดแล้วผู้ใช้กด undo กลับ)
+  Future<void> _removeWordFromIgnoreList(String word) async {
+    final lowerWord = word.trim().toLowerCase();
+    if (lowerWord.isEmpty) return;
+
+    bool removedEn = false;
+    if (AutocorrectEngine.userEnWords.contains(lowerWord)) {
+      AutocorrectEngine.userEnWords.remove(lowerWord);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('userEnWords', AutocorrectEngine.userEnWords.toList());
+      removedEn = true;
+    }
+
+    bool removedIgnore = false;
+    if (_ignoredWords.contains(lowerWord)) {
+      setState(() {
+        _ignoredWords.remove(lowerWord);
+      });
+      await _saveSetting('ignoredWords', _ignoredWords);
+      removedIgnore = true;
+    }
+
+    if (removedEn || removedIgnore) {
+      AppLogger.log("Dart: Removed wrongly corrected word from dictionary: '$lowerWord'");
     }
   }
 
