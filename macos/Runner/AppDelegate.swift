@@ -396,8 +396,8 @@ class AppDelegate: FlutterAppDelegate {
             return event
         }
         
-        // Navigation keys: Esc (53), Left (123), Right (124), Down (125), Up (126), Home (115), PageUp (116), End (119), PageDown (121)
-        let navigationKeys: Set<Int64> = [53, 123, 124, 125, 126, 115, 116, 119, 121]
+        // Navigation keys: Tab (48), Esc (53), Left (123), Right (124), Down (125), Up (126), Home (115), PageUp (116), End (119), PageDown (121)
+        let navigationKeys: Set<Int64> = [48, 53, 123, 124, 125, 126, 115, 116, 119, 121]
         if navigationKeys.contains(keyCode) {
             print("AppDelegate: clearBuffer called due to navigation key (keyCode: \(keyCode))")
             fflush(stdout)
