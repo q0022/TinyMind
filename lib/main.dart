@@ -264,6 +264,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   final SystemTray _systemTray = SystemTray();
 
+  int _lastOsKeystrokeCount = 0; // Track the exact OS keystrokes to sync with Swift
+
   // ประวัติการแก้ไขคำผิดล่าสุด
   List<Map<String, String>> _recentCorrections = [];
 
@@ -307,6 +309,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     // ฟังเหตุการณ์จาก macOS Keyboard Hook
     _platform.setMethodCallHandler((call) async {
       if (!_isEnabled) return;
+
+      if (call.arguments is Map) {
+        final args = call.arguments as Map;
+        if (args.containsKey('osKeystrokeCount')) {
+          _lastOsKeystrokeCount = args['osKeystrokeCount'] as int;
+        }
+      }
 
       switch (call.method) {
         case 'onKey':
@@ -1287,6 +1296,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
             suffix,
             languageCode: isTh ? 'th' : 'en',
             toTarget: isTh,
+            context: expectedBuffer,
           );
           
           final String originalWord = expectedBuffer;
@@ -1331,6 +1341,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       trailingPunctuation,
       languageCode: result.languageCode,
       toTarget: result.isToTargetLanguage,
+      context: trimmedWord, // Pass the trimmed word as context for trailing punctuation (e.g. '.' -> 'ใ')
     );
     final String replacement = result.correctedWord + translatedTrailing;
     final int backspaces = _calculateBackspaces(_currentBuffer, replacement);
@@ -1442,17 +1453,15 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           
           if (isValid) {
             backspaces += 1;
-            // If the cluster has a single vowel without any tone marks, Flutter Sandbox deletes it character by character (vowel first, then consonant)
-            final hasVowel = marks.any((m) => RegExp(r'[ิีึืุูั็ํ]').hasMatch(m));
-            final hasTone = marks.any((m) => RegExp(r'[่้๊๋์]').hasMatch(m));
-            if (hasVowel && !hasTone && appMode == 'flutter') {
-              backspaces += 1;
-            }
-            // SARA AM ('ำ') requires:
-            // - 3 backspaces total in Native (adds 2)
-            // - 2 backspaces total in Chromium and Flutter (adds 1)
-            if (marks.contains('ำ')) {
-              backspaces += (appMode == 'native') ? 2 : 1;
+            if (appMode == 'flutter' || appMode == 'chromium') {
+              // Flutter and Chromium delete character by character, so each mark requires 1 backspace
+              backspaces += marks.length;
+            } else if (appMode == 'native') {
+              // Native deletes the entire valid cluster with 1 backspace (which is the base we already added)
+              // SARA AM ('ำ') requires 3 backspaces total in Native (adds 2)
+              if (marks.contains('ำ')) {
+                backspaces += 2;
+              }
             }
           } else {
             backspaces += 1 + marks.length;
@@ -1548,6 +1557,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       await _platform.invokeMethod('replaceText', {
         'backspaces': backspaces,
         'text': replacement,
+        'processedKeystrokes': _lastOsKeystrokeCount,
       });
     } catch (e) {
       AppLogger.log("Dart: Error calling native replaceText: $e");
@@ -1895,12 +1905,41 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         final String? aiCorrected = await AutocorrectEngine.checkAndCorrectAI(trimmedWord);
         AppLogger.log("Dart: _processWordCorrection: AI fallback result for word '$trimmedWord' is '$aiCorrected'");
         
-        // Race Condition Guard: ตรวจสอบว่าผู้ใช้พิมพ์ตัวอื่นต่อหรือลบไประหว่างรอผลลัพธ์หรือไม่
-        // (ยอมรับกรณีที่บัฟเฟอร์เพิ่มแค่ตัวอักษรลงท้าย endingChar เช่น เคาะเว้นวรรค หรือ Enter)
-        final bool isBufferValid = _currentBuffer == expectedBuffer || 
-                                   _currentBuffer == expectedBuffer + endingChar ||
-                                   _currentBuffer.trim() == expectedBuffer.trim();
-        if (!isBufferValid) {
+        // Race Condition Guard & Smart Merge (Double Buffer Strategy)
+        if (_currentBuffer != expectedBuffer && _currentBuffer != expectedBuffer + endingChar) {
+          if (aiCorrected != null && aiCorrected != trimmedWord && _currentBuffer.startsWith(expectedBuffer)) {
+            final String suffix = _currentBuffer.substring(expectedBuffer.length);
+            final bool isThCorrected = RegExp(r'[ก-์]').hasMatch(aiCorrected);
+            
+            final String convertedSuffix = AutocorrectEngine.convertLayout(
+              suffix,
+              languageCode: isThCorrected ? 'th' : 'en',
+              toTarget: isThCorrected,
+              context: expectedBuffer,
+            );
+            
+            final String originalWord = expectedBuffer;
+            final String replacement = aiCorrected + convertedSuffix;
+            final int backspaces = _calculateBackspaces(originalWord + suffix, replacement);
+            
+            AppLogger.log("Dart: AI fallback decided layout word merged with suffix: '$replacement' (Original buffer: '$_currentBuffer', expected: '$expectedBuffer')");
+            _replaceText(backspaces, replacement);
+            
+            // อัปเดตข้อมูลสำหรับการ Undo (เก็บข้อมูลดั้งเดิมของคำแรกรวมกับ suffix เป็นตัวจบคำ)
+            _lastReplacement = {
+              'original': trimmedWord,
+              'corrected': aiCorrected,
+            };
+            _lastReplacementEndingChar = suffix;
+            _canUndo = true;
+            
+            _currentBuffer = replacement;
+            _isLayoutDecidedForCurrentWord = true;
+            _continuousSwitchStopped = true;
+            _syncBufferStatus();
+            _incrementStat('aiRequests');
+            return;
+          }
           AppLogger.log("Dart: _processWordCorrection: AI result discarded because buffer changed ('$_currentBuffer' != '$expectedBuffer')");
           return;
         }

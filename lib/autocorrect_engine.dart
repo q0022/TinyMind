@@ -212,17 +212,25 @@ class AutocorrectEngine {
   }
 
   // แปลงเลย์เอาต์แป้นพิมพ์สำหรับภาษาที่ระบุ
-  static String convertLayout(String input, {required String languageCode, required bool toTarget}) {
+  static String convertLayout(String input, {required String languageCode, required bool toTarget, String? context}) {
     for (var mapper in _mappers) {
       if (mapper.languageCode == languageCode) {
         if (toTarget) {
           if (_hasTargetCharacters(mapper, input)) {
             return input;
           }
+          if (context != null && context.isNotEmpty) {
+            final combined = mapper.convertToTarget(context + input);
+            return combined.substring(combined.length - input.length);
+          }
           return mapper.convertToTarget(input);
         } else {
           if (!_hasTargetCharacters(mapper, input)) {
             return input;
+          }
+          if (context != null && context.isNotEmpty) {
+            final combined = mapper.convertFromTarget(context + input);
+            return combined.substring(combined.length - input.length);
           }
           return mapper.convertFromTarget(input);
         }
