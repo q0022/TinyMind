@@ -17,6 +17,7 @@ import 'commands/slash_command.dart';
 import 'language_mapper.dart';
 import 'localization.dart';
 import 'logger.dart';
+import 'comparison_logger.dart';
 
 part 'dashboard_tab.dart';
 part 'settings_tab.dart';
@@ -27,6 +28,7 @@ final GlobalKey<TinyMindAppState> tinyMindAppKey = GlobalKey<TinyMindAppState>()
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppLogger.init();
+  await ComparisonLogger.init();
 
   // กำหนดค่า Launch at Startup
   LaunchAtStartup.instance.setup(
@@ -1119,6 +1121,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   void _handleKeyPress(String char, {String layout = 'en'}) {
     AppLogger.log("Dart: _handleKeyPress received: '$char' (Layout: $layout)");
+    ComparisonLogger.recordRawKey(char);
+    ComparisonLogger.recordOutputNormal(char);
 
     // หากยอมรับคำแนะนำสะกดคือก่อนหน้านี้ (ไม่ได้กดสลับกลับ) ให้เอาคำนั้นใส่ Dictionary อัตโนมัติ
     if (_canUndo && _lastReplacement != null) {
@@ -1512,7 +1516,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     return count;
   }
 
-  Future<void> _replaceText(int backspaces, String replacement) async {
+  Future<void> _replaceText(int backspaces, String replacement, {int? processedKeystrokes}) async {
+    ComparisonLogger.recordOutputAutocorrect(backspaces, replacement);
     _lastSwapTime = DateTime.now();
     _lastSwappedWord = replacement;
     final sandboxBefore = _sandboxController.text;
@@ -1557,7 +1562,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       await _platform.invokeMethod('replaceText', {
         'backspaces': backspaces,
         'text': replacement,
-        'processedKeystrokes': _lastOsKeystrokeCount,
+        'processedKeystrokes': processedKeystrokes ?? _lastOsKeystrokeCount,
       });
     } catch (e) {
       AppLogger.log("Dart: Error calling native replaceText: $e");
@@ -1663,6 +1668,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   void _handleBackspace() {
     AppLogger.log("Dart: _handleBackspace received. Buffer before: '$_currentBuffer'");
+    ComparisonLogger.recordRawBackspace();
+    ComparisonLogger.recordOutputBackspace();
     if (_lastSwapTime != null && _lastSwappedWord != null) {
       final diff = DateTime.now().difference(_lastSwapTime!).inMilliseconds;
       if (diff < 2000) {
@@ -1719,6 +1726,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _continuousSwitchStopped = false;
     _lastCheckedLen = 0;
     _syncBufferStatus(); // Sync
+    ComparisonLogger.flush();
     
     // Reset Sandbox on buffer clear (Global Mirroring)
     setState(() {
@@ -1731,7 +1739,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     AppLogger.log("Dart: _clearBuffers invoked. Buffers cleared and Sandbox reset.");
   }
   // ประมวลผลแก้ระดับคำ (Local - Zero Latency)
-  void _applyWordCorrection(String originalWord, String endingChar, String corrected, CorrectionResult result, String source) {
+  void _applyWordCorrection(String originalWord, String endingChar, String corrected, CorrectionResult result, String source, [int? processedKeystrokes]) {
     // แยกเครื่องหมายวรรคตอนท้ายคำออกก่อนประมวลผล (หากมี)
     String trimmedWord = originalWord;
     String trailingPunctuation = '';
@@ -1757,7 +1765,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     final String replacement = corrected + translatedTrailing + translatedEndingChar;
     final int backspaces = _calculateBackspaces(originalWord + endingChar, replacement);
 
-    _replaceText(backspaces, replacement);
+    _replaceText(backspaces, replacement, processedKeystrokes: processedKeystrokes);
 
     _syncSlashBufferOnReplacement(originalWord + endingChar, replacement);
 
@@ -1808,6 +1816,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
   // ประมวลผลแก้ระดับคำ (Local - Zero Latency + AI Fallback)
   Future<void> _processWordCorrection(String word, String endingChar) async {
+    final int capturedKeystrokes = _lastOsKeystrokeCount; // Capture keystrokes AT THIS MOMENT
+    
     // 0. ตรวจสอบคีย์ลัดคำย่อ (Text Shortcuts Expansion) ก่อนการแปลงภาษาอื่นๆ
     final shortcutKey = word.trim();
     if (_textShortcuts.containsKey(shortcutKey)) {
@@ -1874,7 +1884,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     
     if (corrected != null && corrected != trimmedWord && result != null) {
       // 1. ส่งคำสั่งแก้ไขผ่าน Local Rules (0ms)
-      _applyWordCorrection(word, endingChar, corrected, result, 'regex');
+      _applyWordCorrection(word, endingChar, corrected, result, 'regex', capturedKeystrokes);
     } else {
       // 2. ถ้า Local ไม่พบคำศัพท์ และเปิดสวิตช์ AI + โหลดโมเดลเสร็จแล้ว -> ส่งให้ AI ช่วยสแกน
       if (_isAiCorrection && AutocorrectEngine.isModelLoaded) {
@@ -1923,7 +1933,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
             final int backspaces = _calculateBackspaces(originalWord + suffix, replacement);
             
             AppLogger.log("Dart: AI fallback decided layout word merged with suffix: '$replacement' (Original buffer: '$_currentBuffer', expected: '$expectedBuffer')");
-            _replaceText(backspaces, replacement);
+            _replaceText(backspaces, replacement, processedKeystrokes: capturedKeystrokes);
             
             // อัปเดตข้อมูลสำหรับการ Undo (เก็บข้อมูลดั้งเดิมของคำแรกรวมกับ suffix เป็นตัวจบคำ)
             _lastReplacement = {
@@ -1954,9 +1964,8 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
             languageCode: languageCode,
             isToTargetLanguage: isThCorrected,
           );
-          
           final String source = AutocorrectEngine.lastDecisionSource;
-          _applyWordCorrection(word, endingChar, aiCorrected, dummyResult, source);
+          _applyWordCorrection(word, endingChar, aiCorrected, dummyResult, source, capturedKeystrokes);
           
           // อัปเดตสถิติจำนวน AI requests
           _incrementStat('aiRequests');
@@ -2049,7 +2058,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       );
       
       // Deduplicate repeated prefix when converting from Thai to English
-      if (!isThai) {
+      if (isThai) {
         for (int len = 1; len <= converted.length ~/ 2; len++) {
           final prefix = converted.substring(0, len);
           final sub = converted.substring(len);
@@ -2096,7 +2105,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       );
       
       // Deduplicate repeated prefix when converting from Thai to English
-      if (!isThai) {
+      if (isThai) {
         for (int len = 1; len <= converted.length ~/ 2; len++) {
           final prefix = converted.substring(0, len);
           final sub = converted.substring(len);

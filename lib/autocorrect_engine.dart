@@ -293,7 +293,8 @@ class AutocorrectEngine {
         }
 
         if (_commonEnWords.contains(finalEn.toLowerCase()) || 
-            userEnWords.contains(finalEn.toLowerCase())) {
+            userEnWords.contains(finalEn.toLowerCase()) ||
+            RegExp(r'^\d+$').hasMatch(finalEn)) {
           return CorrectionResult(
             correctedWord: finalEn,
             languageCode: mapper.languageCode,
@@ -476,6 +477,18 @@ class AutocorrectEngine {
   static bool isCodeOrSymbol(String word) {
     if (!isCodeFilterEnabled) return false;
     if (word.isEmpty) return false;
+
+    // If the word maps to a known English word or user dictionary word, it is not code or symbol
+    final lowerWord = word.toLowerCase();
+    for (var mapper in _mappers) {
+      if (mapper is KoreanMapper && !isKoreanEnabled) continue;
+      if (mapper is JapaneseMapper && !isJapaneseEnabled) continue;
+      if (mapper is ChineseMapper && !isChineseEnabled) continue;
+      final enConverted = mapper.convertFromTarget(lowerWord);
+      if (userEnWords.contains(enConverted) || _commonEnWords.contains(enConverted)) {
+        return false;
+      }
+    }
 
     // 0. Bypass URLs, Domains, and Emails immediately
     // e.g., google.com, www.google.com, tinymind.app, boy@tinymind.com

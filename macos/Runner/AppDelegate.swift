@@ -370,7 +370,10 @@ class AppDelegate: FlutterAppDelegate {
                 print("AppDelegate: Enter blocked for AI autocorrection")
                 fflush(stdout)
                 needsAutocorrect = false // เคลียร์ทันทีเพื่อป้องกัน loop
-                channel?.invokeMethod("onEnterTriggered", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.channel?.invokeMethod("onEnterTriggered", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                }
                 return nil // บล็อกปุ่ม Enter
             }
         }
@@ -454,7 +457,10 @@ class AppDelegate: FlutterAppDelegate {
             if keyCode != 49 {
                 print("AppDelegate: clearBuffer called due to Cmd/Ctrl shortcut (keyCode: \(keyCode))")
                 fflush(stdout)
-                channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                }
             } else {
                 print("AppDelegate: Cmd/Ctrl shortcut with keyCode 49 (Space) detected. NOT clearing buffer.")
                 fflush(stdout)
@@ -472,12 +478,18 @@ class AppDelegate: FlutterAppDelegate {
             print("AppDelegate: clearBuffer called due to navigation key (keyCode: \(keyCode))")
             fflush(stdout)
             forceLayoutTarget = nil
-            channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+            }
             return event
         }
         
         if keyCode == 51 { // Backspace
-            channel?.invokeMethod("onBackspace", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.channel?.invokeMethod("onBackspace", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+            }
             return event
         }
         
@@ -558,7 +570,7 @@ class AppDelegate: FlutterAppDelegate {
         let isThai = isCurrentLayoutThai()
         let appMode = getAppMode(bundleID: activeAppBundleID)
         if isThai && (appMode == "native" || appMode == "ignored") && backspaces > 0 {
-            print("AppDelegate: replaceText: Thai layout detected in native/launcher app \(activeAppBundleID). Adding 1 extra backspace for IME swallow.")
+            print("AppDelegate: replaceText: Current layout is Thai. Adding 1 extra backspace for IME swallow.")
             finalBackspaces += 1
         }
         
@@ -582,29 +594,37 @@ class AppDelegate: FlutterAppDelegate {
             usleep(2000) // Allow backspaces to process completely
         }
         
+        // Switch keyboard layout after backspaces are finished, before typing unicode characters
         switchKeyboardLayout(to: targetLang)
         forceLayoutTarget = targetLang
         forceLayoutExpiryTime = Date().addingTimeInterval(0.2) // 200ms grace period
-        usleep(2000) // Allow layout transition to settle before typing
+        usleep(2000) // Allow layout transition to settle
         
         let utf16Chars = Array(text.utf16)
-        print("AppDelegate: replaceText: Typing Unicode string '\(text)' with \(utf16Chars.count) UTF-16 code units...")
+        print("AppDelegate: replaceText: Typing Unicode string '\(text)' with \(utf16Chars.count) UTF-16 code units (one by one)...")
         fflush(stdout)
-        let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
-        let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-        down?.flags = []
-        up?.flags = []
         
-        down?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
-        up?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
+        for char in utf16Chars {
+            let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            down?.flags = []
+            up?.flags = []
+            
+            down?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
+            up?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
+            
+            var unicodeChar = char
+            down?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unicodeChar)
+            up?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unicodeChar)
+            
+            down?.post(tap: .cghidEventTap)
+            usleep(1000)
+            up?.post(tap: .cghidEventTap)
+            usleep(1000)
+        }
         
-        down?.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
-        up?.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
-        
-        down?.post(tap: .cghidEventTap)
-        usleep(1000)
-        up?.post(tap: .cghidEventTap)
-        usleep(1000)
+        // Grace period to let OS/app process the typed queue
+        usleep(10000)
         
         isReplacingText = false
         
@@ -613,6 +633,21 @@ class AppDelegate: FlutterAppDelegate {
             print("AppDelegate: replaceText: Playing back \(eventsToReplay.count) keys typed during AI wait...")
             fflush(stdout)
             for replayEvent in eventsToReplay {
+                // Convert to target layout before replay
+                let keyCode = replayEvent.getIntegerValueField(.keyboardEventKeycode)
+                let flags = replayEvent.flags
+                let isShift = flags.contains(.maskShift)
+                var mappedChar: String? = nil
+                if targetLang == "th" {
+                    mappedChar = isShift ? keyCodeToThShift[keyCode] : keyCodeToThNoShift[keyCode]
+                } else if targetLang == "en" {
+                    mappedChar = isShift ? keyCodeToEnShift[keyCode] : keyCodeToEnNoShift[keyCode]
+                }
+                if let newChar = mappedChar {
+                    let utf16Chars = Array(newChar.utf16)
+                    replayEvent.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
+                }
+                
                 replayEvent.post(tap: .cghidEventTap)
                 usleep(1000)
             }
@@ -623,6 +658,21 @@ class AppDelegate: FlutterAppDelegate {
             print("AppDelegate: replaceText: Playing back \(typingBufferDuringReplacement.count) buffered events...")
             fflush(stdout)
             for bufferedEvent in typingBufferDuringReplacement {
+                // Convert to target layout before replay
+                let keyCode = bufferedEvent.getIntegerValueField(.keyboardEventKeycode)
+                let flags = bufferedEvent.flags
+                let isShift = flags.contains(.maskShift)
+                var mappedChar: String? = nil
+                if targetLang == "th" {
+                    mappedChar = isShift ? keyCodeToThShift[keyCode] : keyCodeToThNoShift[keyCode]
+                } else if targetLang == "en" {
+                    mappedChar = isShift ? keyCodeToEnShift[keyCode] : keyCodeToEnNoShift[keyCode]
+                }
+                if let newChar = mappedChar {
+                    let utf16Chars = Array(newChar.utf16)
+                    bufferedEvent.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
+                }
+                
                 // We do NOT set MAGIC_USER_DATA here because we WANT these events to be intercepted normally
                 // by handleKeyEvent, which will route them to Dart and process them correctly!
                 bufferedEvent.post(tap: .cghidEventTap)
