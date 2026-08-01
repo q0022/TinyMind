@@ -1312,6 +1312,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           _currentBuffer = replacement;
           _isLayoutDecidedForCurrentWord = true;
           _continuousSwitchStopped = true;
+          
+          // อัปเดตข้อมูลผังแป้นพิมพ์ในบัฟเฟอร์ให้ตรงกับผลลัพธ์การสลับภาษาอัตโนมัติของ AI
+          _bufferLayouts.clear();
+          for (int i = 0; i < replacement.length; i++) {
+            _bufferLayouts.add(isTh ? 'th' : 'en');
+          }
+          
           _syncBufferStatus();
           return;
         }
@@ -1393,6 +1400,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     _currentBuffer = replacement;
     _isLayoutDecidedForCurrentWord = true; 
     _continuousSwitchStopped = true; // สิ้นสุดการตรวจต่อเนื่องคำนี้ทันที
+    
+    // อัปเดตข้อมูลผังแป้นพิมพ์ในบัฟเฟอร์ให้ตรงกับผลลัพธ์การสลับภาษาอัตโนมัติ
+    _bufferLayouts.clear();
+    for (int i = 0; i < replacement.length; i++) {
+      _bufferLayouts.add(result.isToTargetLanguage ? 'th' : 'en');
+    }
+    
     _syncBufferStatus();
 
     _saveHistory();
@@ -1559,11 +1573,33 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     }
 
     try {
-      await _platform.invokeMethod('replaceText', {
+      final String? replayed = await _platform.invokeMethod<String>('replaceText', {
         'backspaces': backspaces,
         'text': replacement,
         'processedKeystrokes': processedKeystrokes ?? _lastOsKeystrokeCount,
       });
+      
+      if (replayed != null && replayed.isNotEmpty) {
+        AppLogger.log("Dart: replaceText returned replayed characters: '$replayed'");
+        _currentBuffer = replacement + replayed;
+        
+        final bool hasThai = replacement.contains(RegExp(r'[ก-์]'));
+        final String targetLayout = hasThai ? 'th' : 'en';
+        
+        _bufferLayouts.clear();
+        for (int i = 0; i < _currentBuffer.length; i++) {
+          _bufferLayouts.add(targetLayout);
+        }
+      } else {
+        final bool hasThai = replacement.contains(RegExp(r'[ก-์]'));
+        final String targetLayout = hasThai ? 'th' : 'en';
+        
+        _bufferLayouts.clear();
+        for (int i = 0; i < replacement.length; i++) {
+          _bufferLayouts.add(targetLayout);
+        }
+      }
+      _syncBufferStatus();
     } catch (e) {
       AppLogger.log("Dart: Error calling native replaceText: $e");
     }
@@ -1621,9 +1657,13 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     if (!_isLocalCorrection) return;
     final bool hasSlash = _getSlashCommand(_slashBuffer) != null;
     final bool needsAutocorrect = (_currentBuffer.isNotEmpty && !_isLayoutDecidedForCurrentWord) || hasSlash;
-    AppLogger.log("Dart: _syncBufferStatus: slashBuffer='$_slashBuffer', currentBuffer='$_currentBuffer', hasSlash=$hasSlash, needsAutocorrect=$needsAutocorrect");
+    final bool isBufferEmpty = _currentBuffer.isEmpty && _slashBuffer.isEmpty && _fullSentenceBuffer.isEmpty;
+    AppLogger.log("Dart: _syncBufferStatus: slashBuffer='$_slashBuffer', currentBuffer='$_currentBuffer', hasSlash=$hasSlash, needsAutocorrect=$needsAutocorrect, isBufferEmpty=$isBufferEmpty");
     try {
-      await _platform.invokeMethod('updateBufferStatus', {'needsAutocorrect': needsAutocorrect});
+      await _platform.invokeMethod('updateBufferStatus', {
+        'needsAutocorrect': needsAutocorrect,
+        'isBufferEmpty': isBufferEmpty,
+      });
     } catch (e) {
       // ignore
     }
@@ -2050,7 +2090,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
     if (_currentBuffer.isNotEmpty) {
       // แปลงคำที่กำลังพิมพ์อยู่
-      final bool isThai = RegExp(r'[ก-์]').hasMatch(_currentBuffer);
+      final bool isThai = _bufferLayouts.contains('th') || RegExp(r'[ก-์]').hasMatch(_currentBuffer);
       String converted = AutocorrectEngine.convertLayout(
         _currentBuffer,
         languageCode: 'th',
@@ -2079,6 +2119,12 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       _syncSlashBufferOnReplacement(_currentBuffer, converted);
 
       _currentBuffer = converted;
+      
+      // อัปเดตข้อมูลผังแป้นพิมพ์ในบัฟเฟอร์ให้ตรงกับภาษาใหม่ที่แปลงแล้ว
+      _bufferLayouts.clear();
+      for (int i = 0; i < converted.length; i++) {
+        _bufferLayouts.add(isThai ? 'en' : 'th');
+      }
       
       // บันทึกคำแปลที่ถูกต้องลง Dictionary/Ignore list
       _addWordToIgnoreList(converted);

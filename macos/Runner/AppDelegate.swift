@@ -15,12 +15,15 @@ class AppDelegate: FlutterAppDelegate {
     
     // Enter Block Control for AI
     var needsAutocorrect: Bool = false
+    var isBufferEmpty: Bool = true
     var isReplacingText: Bool = false
     var typingBufferDuringReplacement: [CGEvent] = []
     var rollingKeystrokeBuffer: [CGEvent] = []
     var osKeystrokeCount: Int = 0
     let MAGIC_USER_DATA: Int64 = 998877
     var activeAppBundleID: String = ""
+    var activeAppPID: pid_t? = nil
+    var cachedIsThai: Bool = false
     
     // Grace period state
     var forceLayoutTarget: String? = nil
@@ -100,13 +103,31 @@ class AppDelegate: FlutterAppDelegate {
         if let activeApp = NSWorkspace.shared.frontmostApplication,
            let bundleID = activeApp.bundleIdentifier {
             self.activeAppBundleID = bundleID
+            self.activeAppPID = activeApp.processIdentifier
             let appMode = getAppMode(bundleID: bundleID)
-            print("AppDelegate: initial active app - bundleID=\(bundleID), appMode=\(appMode)")
+            print("AppDelegate: initial active app - bundleID=\(bundleID), appMode=\(appMode), pid=\(activeApp.processIdentifier)")
             fflush(stdout)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.channel?.invokeMethod("updateActiveApp", arguments: ["appMode": appMode])
             }
         }
+        
+        // Initialize layout cache and register observers
+        updateCachedLayout()
+        
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(keyboardLayoutDidChange(_:)),
+            name: NSNotification.Name(rawValue: kTISNotifySelectedKeyboardInputSourceChanged as String),
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardLayoutDidChange(_:)),
+            name: NSTextInputContext.keyboardSelectionDidChangeNotification,
+            object: nil
+        )
         
         // Start listening (Call before super just in case super blocks)
         startMonitoringKeyboard()
@@ -171,8 +192,8 @@ class AppDelegate: FlutterAppDelegate {
                    let backspaces = args["backspaces"] as? Int,
                    let text = args["text"] as? String {
                      let processed = args["processedKeystrokes"] as? Int ?? self?.osKeystrokeCount ?? 0
-                     self?.replaceText(backspaces: backspaces, text: text, processedKeystrokes: processed)
-                     result(true)
+                     let replayed = self?.replaceText(backspaces: backspaces, text: text, processedKeystrokes: processed) ?? ""
+                     result(replayed)
                 } else {
                     result(FlutterError(code: "INVALID_ARGUMENT", message: "Missing backspaces or text", details: nil))
                 }
@@ -201,9 +222,13 @@ class AppDelegate: FlutterAppDelegate {
                 }
                 result(true)
             } else if call.method == "updateBufferStatus" {
-                if let args = call.arguments as? [String: Any],
-                   let status = args["needsAutocorrect"] as? Bool {
-                    self?.needsAutocorrect = status
+                if let args = call.arguments as? [String: Any] {
+                    if let status = args["needsAutocorrect"] as? Bool {
+                        self?.needsAutocorrect = status
+                    }
+                    if let empty = args["isBufferEmpty"] as? Bool {
+                        self?.isBufferEmpty = empty
+                    }
                     result(true)
                 } else {
                     result(false)
@@ -295,16 +320,22 @@ class AppDelegate: FlutterAppDelegate {
     func startMonitoringMouse() {
         // ...
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            guard let self = self else { return }
+            if self.isBufferEmpty { return }
             print("AppDelegate: clearBuffer called due to global mouse click")
             fflush(stdout)
-            self?.forceLayoutTarget = nil
-            self?.channel?.invokeMethod("clearBuffer", arguments: nil)
+            self.forceLayoutTarget = nil
+            self.isBufferEmpty = true
+            self.channel?.invokeMethod("clearBuffer", arguments: nil)
         }
         NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self else { return event }
+            if self.isBufferEmpty { return event }
             print("AppDelegate: clearBuffer called due to local mouse click")
             fflush(stdout)
-            self?.forceLayoutTarget = nil
-            self?.channel?.invokeMethod("clearBuffer", arguments: nil)
+            self.forceLayoutTarget = nil
+            self.isBufferEmpty = true
+            self.channel?.invokeMethod("clearBuffer", arguments: nil)
             return event
         }
     }
@@ -312,26 +343,38 @@ class AppDelegate: FlutterAppDelegate {
     func releaseEnter() {
         print("AppDelegate: Releasing Enter event to system")
         fflush(stdout)
-        if let eventTap = eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-        }
         
         let source = CGEventSource(stateID: .privateState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: true) // 0x24 is Return
         let up = CGEvent(keyboardEventSource: source, virtualKey: 0x24, keyDown: false)
         
-        down?.post(tap: .cghidEventTap)
-        up?.post(tap: .cghidEventTap)
+        down?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
+        up?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
         
-        if let eventTap = eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: true)
-        }
+        if let d = down { postEvent(d) }
+        if let u = up { postEvent(u) }
     }
     
     func handleKeyEvent(_ event: CGEvent) -> CGEvent? {
         let userData = event.getIntegerValueField(.eventSourceUserData)
         if userData == MAGIC_USER_DATA {
             // This is our synthesized event. Let it pass through!
+            return event
+        }
+        
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let navigationKeys: Set<Int64> = [48, 53, 123, 124, 125, 126, 115, 116, 119, 121]
+        if navigationKeys.contains(keyCode) {
+            if !isBufferEmpty {
+                print("AppDelegate: clearBuffer called due to navigation key (keyCode: \(keyCode))")
+                fflush(stdout)
+                forceLayoutTarget = nil
+                isBufferEmpty = true
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                }
+            }
             return event
         }
         
@@ -355,7 +398,6 @@ class AppDelegate: FlutterAppDelegate {
             }
         }
 
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
         
         // Skip layout monitoring for ignored launcher apps
@@ -455,11 +497,14 @@ class AppDelegate: FlutterAppDelegate {
         if flags.contains(.maskCommand) || flags.contains(.maskControl) {
             // Do not clear buffer for layout switch shortcuts (like Cmd+Space, Ctrl+Space)
             if keyCode != 49 {
-                print("AppDelegate: clearBuffer called due to Cmd/Ctrl shortcut (keyCode: \(keyCode))")
-                fflush(stdout)
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    self.channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                if !isBufferEmpty {
+                    print("AppDelegate: clearBuffer called due to Cmd/Ctrl shortcut (keyCode: \(keyCode))")
+                    fflush(stdout)
+                    isBufferEmpty = true
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                    }
                 }
             } else {
                 print("AppDelegate: Cmd/Ctrl shortcut with keyCode 49 (Space) detected. NOT clearing buffer.")
@@ -472,20 +517,11 @@ class AppDelegate: FlutterAppDelegate {
             forceLayoutTarget = nil
         }
         
-        // Navigation keys: Tab (48), Esc (53), Left (123), Right (124), Down (125), Up (126), Home (115), PageUp (116), End (119), PageDown (121)
-        let navigationKeys: Set<Int64> = [48, 53, 123, 124, 125, 126, 115, 116, 119, 121]
-        if navigationKeys.contains(keyCode) {
-            print("AppDelegate: clearBuffer called due to navigation key (keyCode: \(keyCode))")
-            fflush(stdout)
-            forceLayoutTarget = nil
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
-            }
-            return event
-        }
         
         if keyCode == 51 { // Backspace
+            if isBufferEmpty {
+                return event
+            }
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.channel?.invokeMethod("onBackspace", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
@@ -518,18 +554,35 @@ class AppDelegate: FlutterAppDelegate {
             let chars = nsEvent.characters ?? ""
             if !chars.isEmpty {
                 if appMode == "flutter" || appMode == "chromium" {
-                    print("AppDelegate: handleKeyEvent: invoking onKey for '\(chars)'")
+                    isBufferEmpty = false
+                    var layout = cachedIsThai ? "th" : "en"
+                    if let target = self.forceLayoutTarget, let expiry = self.forceLayoutExpiryTime, Date() < expiry {
+                        layout = target
+                    }
+                    print("AppDelegate: handleKeyEvent: invoking onKey for '\(chars)' with layout \(layout)")
                     fflush(stdout)
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
-                        self.channel?.invokeMethod("onKey", arguments: ["char": chars, "keyCode": keyCode, "osKeystrokeCount": self.osKeystrokeCount])
+                        self.channel?.invokeMethod("onKey", arguments: [
+                            "char": chars,
+                            "keyCode": keyCode,
+                            "layout": layout,
+                            "osKeystrokeCount": self.osKeystrokeCount
+                        ])
                     }
                 }
             }
         }
         return event
     }
-    func replaceText(backspaces: Int, text: String, processedKeystrokes: Int) {
+    private func postEvent(_ event: CGEvent) {
+        if let pid = activeAppPID {
+            event.postToPid(pid)
+        } else {
+            event.post(tap: .cghidEventTap)
+        }
+    }
+    func replaceText(backspaces: Int, text: String, processedKeystrokes: Int) -> String {
         print("AppDelegate: replaceText command received. backspaces=\(backspaces), text='\(text)', processed=\(processedKeystrokes), osCount=\(osKeystrokeCount)")
         fflush(stdout)
         isReplacingText = true
@@ -576,6 +629,8 @@ class AppDelegate: FlutterAppDelegate {
         
         let source = CGEventSource(stateID: .privateState)
         
+        var replayedChars = ""
+        
         if finalBackspaces > 0 {
             print("AppDelegate: replaceText: Sending \(finalBackspaces) Backspace events...")
             fflush(stdout)
@@ -586,12 +641,12 @@ class AppDelegate: FlutterAppDelegate {
                 up?.flags = []
                 down?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
                 up?.setIntegerValueField(.eventSourceUserData, value: MAGIC_USER_DATA)
-                down?.post(tap: .cghidEventTap)
+                if let d = down { postEvent(d) }
                 usleep(1000)
-                up?.post(tap: .cghidEventTap)
+                if let u = up { postEvent(u) }
                 usleep(1000)
             }
-            usleep(2000) // Allow backspaces to process completely
+            usleep(15000) // Allow backspaces to process completely in original layout before switching layout
         }
         
         // Switch keyboard layout after backspaces are finished, before typing unicode characters
@@ -617,18 +672,14 @@ class AppDelegate: FlutterAppDelegate {
             down?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unicodeChar)
             up?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unicodeChar)
             
-            down?.post(tap: .cghidEventTap)
+            if let d = down { postEvent(d) }
             usleep(1000)
-            up?.post(tap: .cghidEventTap)
+            if let u = up { postEvent(u) }
             usleep(1000)
         }
         
-        // Grace period to let OS/app process the typed queue
-        usleep(10000)
-        
-        isReplacingText = false
-        
         // Playback the exact keys that were typed during the AI wait but were deleted by the extra backspaces!
+        // We do this while isReplacingText remains true so the user's new physical keys are safely buffered.
         if !eventsToReplay.isEmpty {
             print("AppDelegate: replaceText: Playing back \(eventsToReplay.count) keys typed during AI wait...")
             fflush(stdout)
@@ -644,14 +695,20 @@ class AppDelegate: FlutterAppDelegate {
                     mappedChar = isShift ? keyCodeToEnShift[keyCode] : keyCodeToEnNoShift[keyCode]
                 }
                 if let newChar = mappedChar {
+                    replayedChars += newChar
                     let utf16Chars = Array(newChar.utf16)
                     replayEvent.keyboardSetUnicodeString(stringLength: utf16Chars.count, unicodeString: utf16Chars)
                 }
                 
-                replayEvent.post(tap: .cghidEventTap)
+                postEvent(replayEvent)
                 usleep(1000)
             }
         }
+        
+        // Settle delay for all simulated and wait-replayed keys
+        usleep(30000)
+        
+        isReplacingText = false
         
         // Playback any buffered user typing that occurred DURING the replacement sequence!
         if !typingBufferDuringReplacement.isEmpty {
@@ -675,11 +732,13 @@ class AppDelegate: FlutterAppDelegate {
                 
                 // We do NOT set MAGIC_USER_DATA here because we WANT these events to be intercepted normally
                 // by handleKeyEvent, which will route them to Dart and process them correctly!
-                bufferedEvent.post(tap: .cghidEventTap)
+                postEvent(bufferedEvent)
                 usleep(1000)
             }
             typingBufferDuringReplacement.removeAll()
         }
+        
+        return replayedChars
 
     }
     
@@ -746,12 +805,24 @@ class AppDelegate: FlutterAppDelegate {
         return Array(languagesList)
     }
 
+    private func updateCachedLayout() {
+        let isThai = isCurrentLayoutThai()
+        cachedIsThai = isThai
+        print("AppDelegate: updateCachedLayout: cachedIsThai = \(isThai)")
+        fflush(stdout)
+    }
+
+    @objc private func keyboardLayoutDidChange(_ notification: Notification) {
+        updateCachedLayout()
+    }
+
     @objc private func activeAppChanged(_ notification: Notification) {
         if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
            let bundleID = app.bundleIdentifier {
             self.activeAppBundleID = bundleID
+            self.activeAppPID = app.processIdentifier
             let appMode = getAppMode(bundleID: bundleID)
-            print("AppDelegate: activeAppChanged - bundleID=\(bundleID), appMode=\(appMode)")
+            print("AppDelegate: activeAppChanged - bundleID=\(bundleID), appMode=\(appMode), pid=\(app.processIdentifier)")
             fflush(stdout)
             channel?.invokeMethod("updateActiveApp", arguments: ["appMode": appMode])
         }
