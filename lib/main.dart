@@ -551,6 +551,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       if (_ggufModelPath.isEmpty) {
         getApplicationSupportDirectory().then((dir) {
           final qwenFile = File('${dir.path}/models/qwen2.5-1.5b-instruct-q4_k_m.gguf');
+          final qwen3bFile = File('${dir.path}/models/qwen2.5-3b-instruct-q4_k_m.gguf');
           final smolFile = File('${dir.path}/models/smollm2-360m-instruct-q4_k_m.gguf');
           
           if (qwenFile.existsSync()) {
@@ -558,6 +559,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
               _ggufModelPath = qwenFile.path;
             });
             _saveSetting('ggufModelPath', qwenFile.path);
+          } else if (qwen3bFile.existsSync()) {
+            setState(() {
+              _ggufModelPath = qwen3bFile.path;
+            });
+            _saveSetting('ggufModelPath', qwen3bFile.path);
           } else if (smolFile.existsSync()) {
             setState(() {
               _ggufModelPath = smolFile.path;
@@ -566,8 +572,11 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
           } else {
             // เช็คในโฟลเดอร์พัฒนาของเครื่องพี่บอยเพื่อความรวดเร็วในการทดสอบ
             const qwenDevPath = '/Users/q0022/sites/TinyMind/assets/models/qwen2.5-1.5b-instruct-q4_k_m.gguf';
+            const qwen3bDevPath = '/Users/q0022/sites/TinyMind/assets/models/qwen2.5-3b-instruct-q4_k_m.gguf';
             const smolDevPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
-            final defaultPath = File(qwenDevPath).existsSync() ? qwenDevPath : smolDevPath;
+            final defaultPath = File(qwenDevPath).existsSync() 
+                ? qwenDevPath 
+                : (File(qwen3bDevPath).existsSync() ? qwen3bDevPath : smolDevPath);
             
             if (File(defaultPath).existsSync()) {
               setState(() {
@@ -921,10 +930,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       modelsDir.createSync(recursive: true);
     }
     
-    // ตั้งค่า Qwen เป็นตัวเลือกอันดับแรก
+    // ตั้งค่า Qwen 2.5 1.5B เป็นตัวเลือกอันดับแรก
     final qwenFile = File('${modelsDir.path}/qwen2.5-1.5b-instruct-q4_k_m.gguf');
     if (qwenFile.existsSync()) {
       return qwenFile.path;
+    }
+    final qwen3bFile = File('${modelsDir.path}/qwen2.5-3b-instruct-q4_k_m.gguf');
+    if (qwen3bFile.existsSync()) {
+      return qwen3bFile.path;
     }
     final modelFile = File('${modelsDir.path}/smollm2-360m-instruct-q4_k_m.gguf');
     if (modelFile.existsSync()) {
@@ -933,12 +946,15 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     
     // ลองคัดลอกไฟล์พัฒนาในเครื่องผู้พัฒนาเพื่อประหยัดเน็ตก่อน
     const qwenDevPath = '/Users/q0022/sites/TinyMind/assets/models/qwen2.5-1.5b-instruct-q4_k_m.gguf';
+    const qwen3bDevPath = '/Users/q0022/sites/TinyMind/assets/models/qwen2.5-3b-instruct-q4_k_m.gguf';
     const smolDevPath = '/Users/q0022/sites/TinyMind/assets/models/SmolLM2-360M-Instruct-Q4_K_M.gguf';
-    final devPath = File(qwenDevPath).existsSync() ? qwenDevPath : smolDevPath;
+    final devPath = File(qwenDevPath).existsSync() 
+        ? qwenDevPath 
+        : (File(qwen3bDevPath).existsSync() ? qwen3bDevPath : smolDevPath);
     
     // หากอยู่ในเครื่องผู้พัฒนาและมีไฟล์ใดไฟล์หนึ่ง ให้เลือกคัดลอกไฟล์นั้น
     final targetFile = File(devPath).existsSync()
-        ? (devPath == qwenDevPath ? qwenFile : modelFile)
+        ? (devPath == qwenDevPath ? qwenFile : (devPath == qwen3bDevPath ? qwen3bFile : modelFile))
         : qwenFile;
     
     if (File(devPath).existsSync()) {
@@ -2090,7 +2106,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
     if (_currentBuffer.isNotEmpty) {
       // แปลงคำที่กำลังพิมพ์อยู่
-      final bool isThai = _bufferLayouts.contains('th') || RegExp(r'[ก-์]').hasMatch(_currentBuffer);
+      final bool isThai = RegExp(r'[ก-์]').hasMatch(_currentBuffer);
       String converted = AutocorrectEngine.convertLayout(
         _currentBuffer,
         languageCode: 'th',

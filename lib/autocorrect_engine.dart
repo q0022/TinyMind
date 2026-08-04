@@ -865,12 +865,13 @@ $exampleTarget<|im_end|>
       }
     }
 
-    // 4. ถ้าไม่ถูกต้องทั้งคู่ -> คืนค่า null ทันทีโดยไม่ต้องเรียก AI
-    // ในโหมด AI (correctionMode == 'ai') เราจะไม่ตัดสิทธิ์ เพื่อปล่อยให้ AI ได้ตัดสินใจ 100%
+    // 4. ถ้าไม่ถูกต้องทั้งคู่ -> หากมีสัญลักษณ์ QWERTY คีย์บอร์ดผสมและคำยาวเกิน 4 ตัว ให้ส่งให้ AI ช่วยวิเคราะห์
     if (correctionMode != 'ai' && !isEnValid && !isThValid) {
-      AppLogger.log("TinyMind Heuristic: Both words are invalid (En='$wordEn', Th='$wordTh'). Wait for more input.");
-      onAiDecision?.call(wordEn, 'NONE', 'Regex');
-      return null;
+      if (wordEn.length < 4 || _llama == null) {
+        AppLogger.log("TinyMind Heuristic: Both words are invalid (En='$wordEn', Th='$wordTh'). Wait for more input.");
+        onAiDecision?.call(wordEn, 'NONE', 'Regex');
+        return null;
+      }
     }
 
     // 5. ถ้าไม่ใช่คำทั่วไปทั้งคู่ และความยาวคำสะสมสั้น (< 6 ตัวอักษร) -> คืน null ทันทีเพื่อรอพิมพ์คำให้เสร็จ
