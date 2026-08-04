@@ -553,7 +553,7 @@ class AppDelegate: FlutterAppDelegate {
         if let nsEvent = NSEvent(cgEvent: event) {
             let chars = nsEvent.characters ?? ""
             if !chars.isEmpty {
-                if appMode == "flutter" || appMode == "chromium" {
+                if appMode != "ignored" {
                     isBufferEmpty = false
                     var layout = cachedIsThai ? "th" : "en"
                     if let target = self.forceLayoutTarget, let expiry = self.forceLayoutExpiryTime, Date() < expiry {
