@@ -363,7 +363,21 @@ class AppDelegate: FlutterAppDelegate {
         }
         
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        let navigationKeys: Set<Int64> = [48, 53, 123, 124, 125, 126, 115, 116, 119, 121]
+        
+        // Instant pass-through for Tab key (keyCode 48) for 0ms delay in Terminal/Editors
+        if keyCode == 48 {
+            if !isBufferEmpty {
+                forceLayoutTarget = nil
+                isBufferEmpty = true
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.channel?.invokeMethod("clearBuffer", arguments: ["osKeystrokeCount": self.osKeystrokeCount])
+                }
+            }
+            return event
+        }
+        
+        let navigationKeys: Set<Int64> = [53, 123, 124, 125, 126, 115, 116, 119, 121]
         if navigationKeys.contains(keyCode) {
             if !isBufferEmpty {
                 print("AppDelegate: clearBuffer called due to navigation key (keyCode: \(keyCode))")
@@ -746,6 +760,8 @@ class AppDelegate: FlutterAppDelegate {
         print("AppDelegate: switchKeyboardLayout: requested switch to \(targetLanguage)")
         fflush(stdout)
         
+        self.cachedIsThai = (targetLanguage == "th")
+        
         // Get the list of all active input sources
         guard let sources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
             print("AppDelegate: switchKeyboardLayout: Failed to create input source list")
@@ -757,20 +773,29 @@ class AppDelegate: FlutterAppDelegate {
             guard let typePtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceType) else { continue }
             let type = Unmanaged<CFString>.fromOpaque(typePtr).takeUnretainedValue() as String
             
-            if type == kTISTypeKeyboardLayout as String || type == "TISInputSourceTypeKeyboardLayout" {
+            let isKeyboardLayout = (type == (kTISTypeKeyboardLayout as String) || type == "TISInputSourceTypeKeyboardLayout" || type.contains("Keyboard"))
+            if isKeyboardLayout {
+                var match = false
                 if let langPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages) {
                     let languages = Unmanaged<CFArray>.fromOpaque(langPtr).takeUnretainedValue() as? [String] ?? []
-                    
-                    if languages.contains(where: { $0.hasPrefix(targetLanguage) }) {
-                        let status = TISSelectInputSource(source)
-                        if status == noErr {
-                            print("AppDelegate: switchKeyboardLayout: Successfully switched keyboard layout to \(targetLanguage)")
-                            fflush(stdout)
-                            return
-                        } else {
-                            print("AppDelegate: switchKeyboardLayout: Failed to select input source: \(status)")
-                            fflush(stdout)
-                        }
+                    if targetLanguage == "th" {
+                        match = languages.contains(where: { $0.hasPrefix("th") })
+                    } else if targetLanguage == "en" {
+                        match = languages.contains(where: { $0.hasPrefix("en") || $0.lowercased().contains("us") || $0.lowercased().contains("abc") }) || !languages.contains(where: { $0.hasPrefix("th") })
+                    }
+                } else if targetLanguage == "en" {
+                    match = true
+                }
+                
+                if match {
+                    let status = TISSelectInputSource(source)
+                    if status == noErr {
+                        print("AppDelegate: switchKeyboardLayout: Successfully switched keyboard layout to \(targetLanguage)")
+                        fflush(stdout)
+                        return
+                    } else {
+                        print("AppDelegate: switchKeyboardLayout: Failed to select input source: \(status)")
+                        fflush(stdout)
                     }
                 }
             }

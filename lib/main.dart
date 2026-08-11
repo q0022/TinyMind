@@ -1673,7 +1673,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     if (!_isLocalCorrection) return;
     final bool hasSlash = _getSlashCommand(_slashBuffer) != null;
     final bool needsAutocorrect = (_currentBuffer.isNotEmpty && !_isLayoutDecidedForCurrentWord) || hasSlash;
-    final bool isBufferEmpty = _currentBuffer.isEmpty && _slashBuffer.isEmpty && _fullSentenceBuffer.isEmpty;
+    final bool isBufferEmpty = _currentBuffer.trim().isEmpty && _slashBuffer.isEmpty && _fullSentenceBuffer.isEmpty;
     AppLogger.log("Dart: _syncBufferStatus: slashBuffer='$_slashBuffer', currentBuffer='$_currentBuffer', hasSlash=$hasSlash, needsAutocorrect=$needsAutocorrect, isBufferEmpty=$isBufferEmpty");
     try {
       await _platform.invokeMethod('updateBufferStatus', {
