@@ -1233,18 +1233,24 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     final int len = _currentBuffer.length;
     final int startLen = _autoSwitchLength;
 
-    // หากตัดสินไม่ได้และยาวถึงรอบสุดท้าย + 2 (เช่น >= startLen + 6) ให้ Beep 1 ครั้งและหยุดการตรวจ
+    // หากตัดสินไม่ได้และยาวถึงรอบสุดท้าย + 2 (เช่น >= startLen + 6) ให้หยุดการตรวจและเคลียร์ล็อกใน Terminal
     if (len >= startLen + 6 && !_continuousSwitchStopped) {
       _continuousSwitchStopped = true;
+      if (_activeAppMode == 'terminal') {
+        _isLayoutDecidedForCurrentWord = true; // เคลียร์สถานะค้างรอแก้ไขเพื่อไม่ให้บล็อก Tab/Enter ใน Terminal
+      }
       _syncBufferStatus();
       
-      try {
-        await SystemSound.play(SystemSoundType.alert);
-      } catch (e) {
-        // ignore
+      // ไม่ส่งเสียง Beep หากรันอยู่ใน Terminal
+      if (_activeAppMode != 'terminal') {
+        try {
+          await SystemSound.play(SystemSoundType.alert);
+        } catch (e) {
+          // ignore
+        }
       }
       
-      AppLogger.log("Dart: _checkContinuousBufferCorrection: reached final checkpoint (${startLen + 6}) without layout decision. Beeped and stopped continuous checks.");
+      AppLogger.log("Dart: _checkContinuousBufferCorrection: reached final checkpoint (${startLen + 6}) without layout decision. Stopped continuous checks.");
       return;
     }
 
@@ -1944,6 +1950,12 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     } else {
       // 2. ถ้า Local ไม่พบคำศัพท์ และเปิดสวิตช์ AI + โหลดโมเดลเสร็จแล้ว -> ส่งให้ AI ช่วยสแกน
       if (_isAiCorrection && AutocorrectEngine.isModelLoaded) {
+        // ใน Terminal ห้ามให้ AI สลับภาษาคำประเภท ASCII / Path / Command เด็ดขาด
+        if (_activeAppMode == 'terminal' && RegExp(r'^[a-zA-Z0-9_\-./~]+$').hasMatch(trimmedWord)) {
+          AppLogger.log("Dart: _processWordCorrection: word '$trimmedWord' is ASCII/Command path in Terminal. Skipping AI fallback.");
+          return;
+        }
+
         if (AutocorrectEngine.isCodeOrSymbol(trimmedWord)) {
           AppLogger.log("Dart: _processWordCorrection: word '$trimmedWord' is code/symbol. Skipping AI fallback.");
           return;
