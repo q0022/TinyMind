@@ -249,6 +249,25 @@ class AutocorrectEngine {
       return null;
     }
 
+    // 00. SPECIAL NUMBER-ROW AUTO CORRECTION:
+    // หากพิมพ์ตัวอักษรแป้นไทยแถวตัวเลข (เช่น /ภ -> 24, /-ภ -> 234, /ถ -> 25)
+    // ที่ไม่มีความหมายในภาษาไทย แต่เมื่อแปลงเป็นภาษาอังกฤษแล้วได้ตัวเลขเพียวๆ -> ให้แปลงเป็นตัวเลขทันที!
+    for (var mapper in _mappers) {
+      if (mapper is ThaiMapper) {
+        final enConverted = mapper.convertFromTarget(word);
+        if (RegExp(r'^\d+([.,]\d+)?$').hasMatch(enConverted)) {
+          if (!mapper.isValidPatternStrict(word, '')) {
+            AppLogger.log("Dart: checkAndCorrectLocal: converted Thai number-row typo '$word' -> '$enConverted'");
+            return CorrectionResult(
+              correctedWord: enConverted,
+              languageCode: 'th',
+              isToTargetLanguage: false,
+            );
+          }
+        }
+      }
+    }
+
     // ป้องกันการแปลงหากคำเป็นโค้ด พาธ อีเมล หรือสัญลักษณ์ระบบ
     if (isCodeOrSymbol(word)) {
       return null;
