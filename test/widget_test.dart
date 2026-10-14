@@ -101,17 +101,18 @@ void main() {
     expect(AutocorrectEngine.isCodeOrSymbol('อ.พาน'), isFalse);
     expect(AutocorrectEngine.isCodeOrSymbol('ม.1'), isFalse);
 
-    // 10. Test Mai Muan constraints & period layout conversion for abbreviations
-    expect(AutocorrectEngine.convertLayout('v.rko', languageCode: 'th', toTarget: true), equals('อ.พาน'));
-    expect(AutocorrectEngine.convertLayout(',.1', languageCode: 'th', toTarget: true), equals('ม.1'));
-    expect(AutocorrectEngine.convertLayout('9.sov\'dt-t', languageCode: 'th', toTarget: true), equals('ต.หนองกะขะ'));
+    // 10. Test natural Mai Muan ('.' -> 'ใ') & period ('"' -> '.') layout conversion
+    expect(AutocorrectEngine.convertLayout('v"rko', languageCode: 'th', toTarget: true), equals('อ.พาน'));
+    expect(AutocorrectEngine.convertLayout(',"8"', languageCode: 'th', toTarget: true), equals('ม.ค.'));
+    expect(AutocorrectEngine.convertLayout('9"sov\'dt-t', languageCode: 'th', toTarget: true), equals('ต.หนองกะขะ'));
     expect(AutocorrectEngine.convertLayout('fu.0', languageCode: 'th', toTarget: true), equals('ดีใจ'));
     expect(AutocorrectEngine.convertLayout('lt.4h', languageCode: 'th', toTarget: true), equals('สะใภ้'));
     expect(AutocorrectEngine.convertLayout('5hk.=', languageCode: 'th', toTarget: true), equals('ถ้าใช'));
     expect(AutocorrectEngine.convertLayout('5hk.=h', languageCode: 'th', toTarget: true), equals('ถ้าใช้'));
     expect(AutocorrectEngine.convertLayout('.=', languageCode: 'th', toTarget: true), equals('ใช'));
     expect(AutocorrectEngine.convertLayout('.=h', languageCode: 'th', toTarget: true), equals('ใช้'));
-    expect(AutocorrectEngine.convertLayout(',.8.', languageCode: 'th', toTarget: true), equals('ม.ค.'));
+    expect(AutocorrectEngine.convertLayout('c]h;.', languageCode: 'th', toTarget: true), equals('แล้วใ'));
+    expect(AutocorrectEngine.convertLayout('c]h;.=jxjt', languageCode: 'th', toTarget: true), equals('แล้วใช่ป่ะ'));
 
     // 11. Test checkAndCorrectAI does not bypass English layout with periods
     AutocorrectEngine.checkAndCorrectAI('อ.พาน').then((res) {
@@ -119,7 +120,7 @@ void main() {
     });
 
     // 12. Test identifyCorrectWordAI chooses abbreviation over invalid English
-    AutocorrectEngine.identifyCorrectWordAI('v.rko', 'อ.พาน').then((res) {
+    AutocorrectEngine.identifyCorrectWordAI('v"rko', 'อ.พาน').then((res) {
       expect(res, equals('อ.พาน'));
     });
 
