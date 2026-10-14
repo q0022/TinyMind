@@ -1552,7 +1552,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
     return count;
   }
 
-  Future<void> _replaceText(int backspaces, String replacement, {int? processedKeystrokes}) async {
+  Future<void> _replaceText(int backspaces, String replacement, {int? processedKeystrokes, String? targetLayout}) async {
     ComparisonLogger.recordOutputAutocorrect(backspaces, replacement);
     _lastSwapTime = DateTime.now();
     _lastSwappedWord = replacement;
@@ -1599,26 +1599,27 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
         'backspaces': backspaces,
         'text': replacement,
         'processedKeystrokes': processedKeystrokes ?? _lastOsKeystrokeCount,
+        if (targetLayout != null) 'targetLayout': targetLayout,
       });
       
       if (replayed != null && replayed.isNotEmpty) {
         AppLogger.log("Dart: replaceText returned replayed characters: '$replayed'");
         _currentBuffer = replacement + replayed;
         
-        final bool hasThai = replacement.contains(RegExp(r'[ก-์]'));
-        final String targetLayout = hasThai ? 'th' : 'en';
+        final bool hasThai = replacement.contains(RegExp(r'[ก-๙]'));
+        final String resolvedLayout = targetLayout ?? (hasThai ? 'th' : 'en');
         
         _bufferLayouts.clear();
         for (int i = 0; i < _currentBuffer.length; i++) {
-          _bufferLayouts.add(targetLayout);
+          _bufferLayouts.add(resolvedLayout);
         }
       } else {
-        final bool hasThai = replacement.contains(RegExp(r'[ก-์]'));
-        final String targetLayout = hasThai ? 'th' : 'en';
+        final bool hasThai = replacement.contains(RegExp(r'[ก-๙]'));
+        final String resolvedLayout = targetLayout ?? (hasThai ? 'th' : 'en');
         
         _bufferLayouts.clear();
         for (int i = 0; i < replacement.length; i++) {
-          _bufferLayouts.add(targetLayout);
+          _bufferLayouts.add(resolvedLayout);
         }
       }
       _syncBufferStatus();
@@ -2118,11 +2119,14 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
 
     if (_currentBuffer.isNotEmpty) {
       // แปลงคำที่กำลังพิมพ์อยู่
-      final bool isThai = RegExp(r'[ก-์]').hasMatch(_currentBuffer);
+      final bool hasThaiChars = RegExp(r'[ก-๙]').hasMatch(_currentBuffer);
+      final bool hasEngChars = RegExp(r'[a-zA-Z]').hasMatch(_currentBuffer);
+      final bool isThai = hasThaiChars || (!hasEngChars && _bufferLayouts.contains('th'));
       String converted = AutocorrectEngine.convertLayout(
         _currentBuffer,
         languageCode: 'th',
         toTarget: !isThai,
+        force: true,
       );
       
       // Deduplicate repeated prefix when converting from Thai to English
@@ -2141,8 +2145,9 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       }
       
       final int backspaces = _calculateBackspaces(_currentBuffer, converted);
+      final String targetLayout = isThai ? 'en' : 'th';
       
-      _replaceText(backspaces, converted);
+      _replaceText(backspaces, converted, targetLayout: targetLayout);
 
       _syncSlashBufferOnReplacement(_currentBuffer, converted);
 
@@ -2151,7 +2156,7 @@ class _MainDashboardState extends State<MainDashboard> with WindowListener {
       // อัปเดตข้อมูลผังแป้นพิมพ์ในบัฟเฟอร์ให้ตรงกับภาษาใหม่ที่แปลงแล้ว
       _bufferLayouts.clear();
       for (int i = 0; i < converted.length; i++) {
-        _bufferLayouts.add(isThai ? 'en' : 'th');
+        _bufferLayouts.add(targetLayout);
       }
       
       // บันทึกคำแปลที่ถูกต้องลง Dictionary/Ignore list

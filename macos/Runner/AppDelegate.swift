@@ -192,7 +192,8 @@ class AppDelegate: FlutterAppDelegate {
                    let backspaces = args["backspaces"] as? Int,
                    let text = args["text"] as? String {
                      let processed = args["processedKeystrokes"] as? Int ?? self?.osKeystrokeCount ?? 0
-                     let replayed = self?.replaceText(backspaces: backspaces, text: text, processedKeystrokes: processed) ?? ""
+                     let targetLayout = args["targetLayout"] as? String
+                     let replayed = self?.replaceText(backspaces: backspaces, text: text, processedKeystrokes: processed, targetLayout: targetLayout) ?? ""
                      result(replayed)
                 } else {
                     result(FlutterError(code: "INVALID_ARGUMENT", message: "Missing backspaces or text", details: nil))
@@ -569,6 +570,11 @@ class AppDelegate: FlutterAppDelegate {
             if !chars.isEmpty {
                 if appMode != "ignored" {
                     isBufferEmpty = false
+                    if keyCodeToThNoShift[keyCode] == chars || keyCodeToThShift[keyCode] == chars {
+                        cachedIsThai = true
+                    } else if keyCodeToEnNoShift[keyCode] == chars || keyCodeToEnShift[keyCode] == chars {
+                        cachedIsThai = false
+                    }
                     var layout = cachedIsThai ? "th" : "en"
                     if let target = self.forceLayoutTarget, let expiry = self.forceLayoutExpiryTime, Date() < expiry {
                         layout = target
@@ -596,7 +602,7 @@ class AppDelegate: FlutterAppDelegate {
             event.post(tap: .cghidEventTap)
         }
     }
-    func replaceText(backspaces: Int, text: String, processedKeystrokes: Int) -> String {
+    func replaceText(backspaces: Int, text: String, processedKeystrokes: Int, targetLayout: String? = nil) -> String {
         print("AppDelegate: replaceText command received. backspaces=\(backspaces), text='\(text)', processed=\(processedKeystrokes), osCount=\(osKeystrokeCount)")
         fflush(stdout)
         isReplacingText = true
@@ -607,7 +613,9 @@ class AppDelegate: FlutterAppDelegate {
         let hasJapaneseKana = text.unicodeScalars.contains { ($0.value >= 0x3040 && $0.value <= 0x309F) || ($0.value >= 0x30A0 && $0.value <= 0x30FF) }
         let hasChineseHanzi = text.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
         
-        if hasThai {
+        if let explicitTarget = targetLayout, !explicitTarget.isEmpty {
+            targetLang = explicitTarget
+        } else if hasThai {
             targetLang = "th"
         } else if hasKorean {
             targetLang = "ko"

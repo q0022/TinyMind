@@ -212,11 +212,11 @@ class AutocorrectEngine {
   }
 
   // แปลงเลย์เอาต์แป้นพิมพ์สำหรับภาษาที่ระบุ
-  static String convertLayout(String input, {required String languageCode, required bool toTarget, String? context}) {
+  static String convertLayout(String input, {required String languageCode, required bool toTarget, String? context, bool force = false}) {
     for (var mapper in _mappers) {
       if (mapper.languageCode == languageCode) {
         if (toTarget) {
-          if (_hasTargetCharacters(mapper, input)) {
+          if (!force && _hasTargetCharacters(mapper, input)) {
             return input;
           }
           if (context != null && context.isNotEmpty) {
@@ -225,7 +225,7 @@ class AutocorrectEngine {
           }
           return mapper.convertToTarget(input);
         } else {
-          if (!_hasTargetCharacters(mapper, input)) {
+          if (!force && !_hasTargetCharacters(mapper, input)) {
             return input;
           }
           if (context != null && context.isNotEmpty) {
